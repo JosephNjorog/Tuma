@@ -4,13 +4,10 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
-  HeadContent,
-  Scripts,
 } from "@tanstack/react-router";
 import { WagmiProvider } from "wagmi";
-import { useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
 
-import appCss from "../styles.css?url";
 import { reportError } from "../lib/error-reporting";
 import { wagmiConfig } from "../lib/web3";
 
@@ -78,52 +75,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "TUMA — Money that moves like a text message" },
-      {
-        name: "description",
-        content:
-          "TUMA is a mobile-first app for sending, receiving, and spending money across Africa using just a phone number.",
-      },
-      { name: "author", content: "TUMA" },
-      { property: "og:title", content: "TUMA" },
-      {
-        property: "og:description",
-        content:
-          "Send money across Africa in seconds. No bank account needed — just a phone number.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "TUMA" },
-      {
-        name: "twitter:description",
-        content: "Money that moves like a text message.",
-      },
-    ],
-    links: [{ rel: "stylesheet", href: appCss }],
-  }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
-
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
