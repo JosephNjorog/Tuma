@@ -51,6 +51,11 @@ export type MomoTransferResult = {
  * @param currency  "GHS" or "UGX"
  * @param ref    Internal transaction reference
  */
+function targetEnvironment(currency: "GHS" | "UGX"): string {
+  if (process.env.MOMO_ENV !== "production") return "sandbox";
+  return currency === "GHS" ? "mtnghana" : "mtnuganda";
+}
+
 export async function sendMomoTransfer(
   phone: string,
   amount: number,
@@ -80,7 +85,7 @@ export async function sendMomoTransfer(
     headers: {
       Authorization: `Bearer ${token}`,
       "X-Reference-Id": externalId,
-      "X-Target-Environment": process.env.MOMO_ENV === "production" ? "mtncameroon" : "sandbox",
+      "X-Target-Environment": targetEnvironment(currency),
       "Ocp-Apim-Subscription-Key": process.env.MOMO_SUBSCRIPTION_KEY!,
       "Content-Type": "application/json",
       "X-Callback-Url": process.env.MOMO_CALLBACK_URL!,
@@ -110,8 +115,7 @@ export async function getMomoTransferStatus(
     {
       headers: {
         Authorization: `Bearer ${token}`,
-        "X-Target-Environment":
-          process.env.MOMO_ENV === "production" ? "mtncameroon" : "sandbox",
+        "X-Target-Environment": process.env.MOMO_ENV === "production" ? "mtnghana" : "sandbox",
         "Ocp-Apim-Subscription-Key": process.env.MOMO_SUBSCRIPTION_KEY!,
       },
     }
