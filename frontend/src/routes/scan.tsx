@@ -3,7 +3,7 @@ import { ArrowLeft, QrCode, Store, Receipt, User, Image as ImageIcon, Zap } from
 import { MobileFrame } from "@/components/MobileFrame";
 
 export const Route = createFileRoute("/scan")({
-  head: () => ({ meta: [{ title: "Scan · TUMA" }, { name: "description", content: "Scan any TUMA QR code." }] }),
+  head: () => ({ meta: [{ title: "Scan · Autopayke" }, { name: "description", content: "Scan any Autopayke QR code." }] }),
   component: Scan,
 });
 
@@ -22,14 +22,14 @@ function Scan() {
           <Link to="/dashboard" className="h-9 w-9 rounded-full bg-background/15 backdrop-blur flex items-center justify-center text-background">
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <h1 className="text-sm font-bold">Scan TUMA QR</h1>
+          <h1 className="text-sm font-bold">Scan Autopayke QR</h1>
           <Link to="/receive" className="h-9 w-9 rounded-full bg-background/15 backdrop-blur flex items-center justify-center text-background">
             <QrCode className="h-4 w-4" />
           </Link>
         </header>
 
         <div className="relative flex-1 flex items-center justify-center px-8" style={{ background: "radial-gradient(at center, oklch(0.25 0.03 50) 0%, oklch(0.12 0.02 50) 100%)" }}>
-          <div className="relative aspect-square w-full max-w-[280px]">
+          <div className="relative aspect-square w-full max-w-70">
             <div className="absolute inset-0 rounded-3xl border-2 border-background/20" />
             {[
               "top-0 left-0 border-t-4 border-l-4 rounded-tl-3xl",
@@ -41,7 +41,7 @@ function Scan() {
             ))}
             <div className="absolute inset-x-4 h-0.5 animate-[scan_2.5s_ease-in-out_infinite]" style={{ background: "linear-gradient(90deg, transparent, oklch(0.68 0.19 28), transparent)" }} />
           </div>
-          <p className="absolute bottom-8 left-0 right-0 text-center text-xs text-background/60">Point at a TUMA QR · or try a demo below</p>
+          <p className="absolute bottom-8 left-0 right-0 text-center text-xs text-background/60">Point at an Autopayke QR · or try a demo below</p>
         </div>
 
         <div className="bg-background text-foreground rounded-t-3xl p-5 pb-8 space-y-3">
