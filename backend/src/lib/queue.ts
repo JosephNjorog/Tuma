@@ -9,13 +9,13 @@ const connection = redisUrl
   ? new IORedis(redisUrl, {
       maxRetriesPerRequest: null,
       enableOfflineQueue: false,
-      lazyConnect: true,
+      tls: redisUrl.startsWith("rediss://") ? {} : undefined,
     })
   : (null as unknown as IORedis);
 
 if (connection) {
-  connection.connect().catch(() => {
-    // Suppress connection errors — ioredis will retry in the background
+  connection.on("error", () => {
+    // Suppress — ioredis retries in background
   });
 }
 
