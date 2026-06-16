@@ -10,6 +10,22 @@ const OXR_APP_ID = process.env.OPEN_EXCHANGE_RATES_APP_ID!;
 const QUOTE_TTL_SECONDS = 35; // 30s lock + 5s grace
 const RATE_CACHE_TTL = 60;
 
+// ── Cash-out fee (flat, tiered) ────────────────────────────────────────────────
+// Tiers are denominated in KES (our reference market) then converted to a USD
+// equivalent using a fixed baseline rate, so the same "network fee" cost applies
+// consistently regardless of the recipient's local currency.
+const KES_BASELINE_RATE = 130;
+const CASHOUT_FEE_TIERS_KES = [
+  { maxUsd: 10, feeKes: 15 },
+  { maxUsd: 50, feeKes: 30 },
+  { maxUsd: Infinity, feeKes: 50 },
+];
+
+export function computeCashoutFeeUsd(amountUsd: number): number {
+  const tier = CASHOUT_FEE_TIERS_KES.find((t) => amountUsd <= t.maxUsd)!;
+  return parseFloat((tier.feeKes / KES_BASELINE_RATE).toFixed(4));
+}
+
 type OxrRates = { rates: Record<string, number> };
 
 // ── Rate fetching ─────────────────────────────────────────────────────────────
