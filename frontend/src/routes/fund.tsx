@@ -1,6 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, CreditCard, Building2, Wallet as WalletIcon, Smartphone, ArrowRight, Check, Copy, Info, Loader2, AlertCircle } from "lucide-react";
+import {
+  ArrowLeft, CreditCard, Building2, Wallet as WalletIcon,
+  Smartphone, ArrowRight, Check, Copy, Info, Loader2, AlertCircle, Lock,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { MobileFrame } from "@/components/MobileFrame";
 import { api, ApiError } from "@/lib/api/client";
@@ -13,6 +16,27 @@ export const Route = createFileRoute("/fund")({
 
 type Method = "card" | "mobile" | "bank" | "crypto";
 
+// Local currency quick amounts per country
+const MOBILE_CURRENCY: Record<string, { code: string; quick: number[] }> = {
+  "+254": { code: "KES", quick: [100, 500, 1_000, 2_500] },
+  "+255": { code: "TZS", quick: [2_000, 5_000, 10_000, 25_000] },
+  "+233": { code: "GHS", quick: [20, 50, 100, 200] },
+  "+256": { code: "UGX", quick: [5_000, 10_000, 25_000, 50_000] },
+};
+
+function getMobileCurrency(phone: string) {
+  for (const [prefix, cfg] of Object.entries(MOBILE_CURRENCY)) {
+    if (phone.startsWith(prefix)) return cfg;
+  }
+  return { code: "KES", quick: [100, 500, 1_000, 2_500] };
+}
+
+function fmtQuick(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(0)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
+  return String(v);
+}
+
 function Fund() {
   const navigate = useNavigate();
   const { accessToken, user, isLoggedIn } = useAuthStore();
@@ -20,7 +44,6 @@ function Fund() {
   const [amount, setAmount] = useState("50");
   const [stage, setStage] = useState<"pick" | "pay" | "done">("pick");
   const amt = Number(amount) || 0;
-  const fee = method === "card" ? amt * 0.015 : method === "bank" ? 0.3 : 0;
 
   useEffect(() => {
     if (!isLoggedIn()) navigate({ to: "/signup" });
@@ -31,13 +54,30 @@ function Fund() {
   const isGH = phone.startsWith("+233");
   const isUG = phone.startsWith("+256");
   const showMobile = isKE || isGH || isUG;
+  const mobileCfg = getMobileCurrency(phone);
+
+  // Fee/credit calculation
+  const fee = method === "card" ? amt * 0.015 : method === "bank" ? 0.3 : 0;
+  const creditedUsdc = method === "mobile" ? (amt / (mobileCfg.code === "KES" ? 130 : mobileCfg.code === "GHS" ? 15 : mobileCfg.code === "UGX" ? 3700 : 130)).toFixed(2) : (amt - fee).toFixed(2);
+
+  // When switching to mobile, reset amount to a sensible local default
+  function handleMethodChange(m: Method) {
+    setMethod(m);
+    if (m === "mobile") setAmount("500");
+    else setAmount("50");
+  }
+
+  const pickAmountLabel = method === "mobile" ? mobileCfg.code : "USDC";
+  const pickAmountQuick = method === "mobile" ? mobileCfg.quick : [20, 50, 100, 250];
 
   return (
     <MobileFrame>
       <div className="flex min-h-full flex-col p-5 pb-10">
         <header className="flex items-center justify-between">
-          <button onClick={() => stage === "pick" ? navigate({ to: "/dashboard" }) : setStage("pick")}
-            className="h-9 w-9 rounded-full border border-border bg-card flex items-center justify-center">
+          <button
+            onClick={() => stage === "pick" ? navigate({ to: "/dashboard" }) : setStage("pick")}
+            className="h-9 w-9 rounded-full border border-border bg-card flex items-center justify-center"
+          >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <h1 className="text-sm font-bold">Add money</h1>
@@ -49,15 +89,25 @@ function Fund() {
             <div className="mt-6">
               <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">You're funding</p>
               <div className="mt-3 rounded-3xl p-5 text-primary-foreground shadow-(--shadow-elegant)" style={{ background: "var(--gradient-portfolio)" }}>
-                <p className="text-xs opacity-90">Amount in USD</p>
+                <p className="text-xs opacity-90">Amount in {pickAmountLabel}</p>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl font-black opacity-80">$</span>
-                  <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                    inputMode="decimal" className="bg-transparent text-5xl font-black outline-none w-full" />
+                  <span className="text-lg font-black opacity-80">{pickAmountLabel}</span>
+                  <input
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                    inputMode="decimal"
+                    className="bg-transparent text-5xl font-black outline-none w-full min-w-0"
+                  />
                 </div>
                 <div className="mt-3 flex gap-2">
-                  {["20","50","100","250"].map((v) => (
-                    <button key={v} onClick={() => setAmount(v)} className={`flex-1 rounded-full py-1.5 text-xs font-semibold backdrop-blur ${amount===v ? "bg-white text-foreground" : "bg-white/15"}`}>${v}</button>
+                  {pickAmountQuick.map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setAmount(String(v))}
+                      className={`flex-1 rounded-full py-1.5 text-xs font-semibold backdrop-blur ${amount === String(v) ? "bg-white text-foreground" : "bg-white/15"}`}
+                    >
+                      {fmtQuick(v)}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -65,23 +115,26 @@ function Fund() {
 
             <p className="mt-6 text-[10px] uppercase tracking-wider text-muted-foreground">Choose method</p>
             <div className="mt-2 space-y-2">
-              <MethodCard active={method==="card"} onClick={() => setMethod("card")} icon={CreditCard} title="Card payment" sub="Visa, Mastercard via Paystack · 1.5% fee" badge="Most popular" />
-              {showMobile && <MethodCard active={method==="mobile"} onClick={() => setMethod("mobile")} icon={Smartphone} title="Mobile money" sub={isGH || isUG ? "MTN MoMo via Paystack" : "M-Pesa via Paystack"} />}
-              <MethodCard active={method==="bank"} onClick={() => setMethod("bank")} icon={Building2} title="Bank transfer" sub="Virtual account · $0.30 flat" />
-              <MethodCard active={method==="crypto"} onClick={() => setMethod("crypto")} icon={WalletIcon} title="Crypto deposit" sub="Send USDC/AVAX from Core or MetaMask" badge="Power user" />
+              <MethodCard active={method === "card"} onClick={() => handleMethodChange("card")} icon={CreditCard} title="Card payment" sub="Visa, Mastercard via Paystack · 1.5% fee" badge="Most popular" />
+              {showMobile && <MethodCard active={method === "mobile"} onClick={() => handleMethodChange("mobile")} icon={Smartphone} title="Mobile money" sub={isGH || isUG ? "MTN MoMo via Paystack" : "M-Pesa via Paystack"} />}
+              <MethodCard active={method === "bank"} onClick={() => handleMethodChange("bank")} icon={Building2} title="Bank transfer" sub="Virtual account · $0.30 flat" />
+              <MethodCard active={method === "crypto"} onClick={() => handleMethodChange("crypto")} icon={WalletIcon} title="Crypto deposit" sub="Send USDC/AVAX from Core or MetaMask" badge="Power user" />
             </div>
 
             <div className="mt-5 rounded-2xl border border-border bg-card p-4 text-xs space-y-2">
-              <Row k="You pay" v={`$${amt.toFixed(2)}`} />
-              <Row k="Fee" v={fee ? `$${fee.toFixed(2)}` : "Free"} />
+              <Row k="You pay" v={`${amt.toFixed(method === "mobile" ? 0 : 2)} ${pickAmountLabel}`} />
+              <Row k="Fee" v={fee ? `${fee.toFixed(2)} USDC` : "Free"} />
               <div className="h-px bg-border my-1" />
-              <Row k="Credited to wallet" v={`${(amt - fee).toFixed(2)} USDC`} bold />
+              <Row k="Credited to wallet" v={`${creditedUsdc} USDC`} bold />
             </div>
 
             <div className="mt-auto pt-6">
-              <button disabled={amt <= 0} onClick={() => setStage("pay")}
+              <button
+                disabled={amt <= 0}
+                onClick={() => setStage("pay")}
                 className="w-full flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-sm font-semibold text-primary-foreground disabled:opacity-40 shadow-(--shadow-elegant)"
-                style={{ background: "var(--gradient-portfolio)" }}>
+                style={{ background: "var(--gradient-portfolio)" }}
+              >
                 Continue <ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -89,7 +142,7 @@ function Fund() {
         )}
 
         {stage === "pay" && method === "card" && <PayCard amount={amt} token={accessToken!} onDone={() => setStage("done")} />}
-        {stage === "pay" && method === "mobile" && <PayMobile amount={amt} token={accessToken!} onDone={() => setStage("done")} />}
+        {stage === "pay" && method === "mobile" && <PayMobile amount={amt} currency={mobileCfg.code} token={accessToken!} onDone={() => setStage("done")} />}
         {stage === "pay" && method === "bank" && <PayBank token={accessToken!} onDone={() => setStage("done")} />}
         {stage === "pay" && method === "crypto" && <PayCrypto token={accessToken!} onDone={() => setStage("done")} />}
 
@@ -113,7 +166,11 @@ function Fund() {
   );
 }
 
-function MethodCard({ active, onClick, icon: Icon, title, sub, badge }: { active: boolean; onClick: () => void; icon: typeof CreditCard; title: string; sub: string; badge?: string }) {
+// ── Method card ───────────────────────────────────────────────────────────────
+
+function MethodCard({ active, onClick, icon: Icon, title, sub, badge }: {
+  active: boolean; onClick: () => void; icon: typeof CreditCard; title: string; sub: string; badge?: string;
+}) {
   return (
     <button onClick={onClick} className={`w-full flex items-center gap-3 rounded-2xl border p-4 text-left transition ${active ? "border-primary bg-primary-soft" : "border-border bg-card hover:bg-muted/50"}`}>
       <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${active ? "text-primary-foreground" : "bg-muted text-foreground"}`} style={active ? { background: "var(--gradient-portfolio)" } : undefined}>
@@ -133,11 +190,138 @@ function MethodCard({ active, onClick, icon: Icon, title, sub, badge }: { active
   );
 }
 
+// ── Interactive card UI ───────────────────────────────────────────────────────
+
+function formatCardNumber(val: string): string {
+  const digits = val.replace(/\D/g, "").slice(0, 16);
+  return digits.replace(/(.{4})/g, "$1 ").trim();
+}
+
+function formatExpiry(val: string): string {
+  const digits = val.replace(/\D/g, "").slice(0, 4);
+  if (digits.length > 2) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return digits;
+}
+
+function cardFaceNumber(raw: string): string {
+  const digits = raw.replace(/\s/g, "").padEnd(16, "•");
+  return [digits.slice(0, 4), digits.slice(4, 8), digits.slice(8, 12), digits.slice(12, 16)].join(" ");
+}
+
+function detectCardBrand(number: string): "visa" | "mastercard" | "amex" | "other" {
+  const d = number.replace(/\s/g, "");
+  if (d.startsWith("4")) return "visa";
+  if (/^5[1-5]/.test(d) || /^2[2-7]/.test(d)) return "mastercard";
+  if (/^3[47]/.test(d)) return "amex";
+  return "other";
+}
+
+function CardBrandLogo({ brand }: { brand: ReturnType<typeof detectCardBrand> }) {
+  if (brand === "visa") return (
+    <span className="text-white font-black text-lg italic tracking-tight" style={{ fontFamily: "serif" }}>VISA</span>
+  );
+  if (brand === "mastercard") return (
+    <svg viewBox="0 0 38 24" width="38" height="24">
+      <circle cx="13" cy="12" r="12" fill="rgba(255,255,255,0.35)" />
+      <circle cx="25" cy="12" r="12" fill="rgba(255,255,255,0.2)" />
+    </svg>
+  );
+  return <CreditCard className="h-6 w-6 text-white/50" />;
+}
+
+function MockCard({ number, name, expiry, cvv, flipped }: {
+  number: string; name: string; expiry: string; cvv: string; flipped: boolean;
+}) {
+  const brand = detectCardBrand(number);
+
+  const wrapperStyle: React.CSSProperties = { perspective: "1000px", height: "192px", position: "relative" };
+  const innerStyle: React.CSSProperties = {
+    position: "relative", width: "100%", height: "100%",
+    transformStyle: "preserve-3d",
+    transition: "transform 0.6s cubic-bezier(0.4,0,0.2,1)",
+    transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+  };
+  const faceStyle: React.CSSProperties = {
+    position: "absolute", inset: 0, borderRadius: "1rem",
+    backfaceVisibility: "hidden", overflow: "hidden",
+    background: "var(--gradient-portfolio)",
+  };
+  const backStyle: React.CSSProperties = {
+    ...faceStyle, transform: "rotateY(180deg)",
+  };
+
+  return (
+    <div style={wrapperStyle}>
+      <div style={innerStyle}>
+        {/* Front */}
+        <div style={faceStyle} className="p-5 shadow-(--shadow-elegant)">
+          <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+          <div className="absolute -left-6 -bottom-10 h-28 w-28 rounded-full bg-black/10 blur-2xl pointer-events-none" />
+          <div className="relative flex justify-between items-start">
+            <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest">Autopayke</p>
+            <CardBrandLogo brand={brand} />
+          </div>
+          {/* Chip */}
+          <div className="relative mt-3 h-7 w-10 rounded-md bg-white/30 flex items-center justify-center">
+            <div className="grid grid-cols-2 gap-0.5">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-1.5 w-2 rounded-sm bg-white/50" />
+              ))}
+            </div>
+          </div>
+          <p className="relative mt-3 font-mono text-base font-bold text-white tracking-widest leading-none">
+            {cardFaceNumber(number)}
+          </p>
+          <div className="relative mt-3 flex items-end justify-between">
+            <div className="flex-1 min-w-0 mr-4">
+              <p className="text-[8px] uppercase text-white/40 mb-0.5">Card holder</p>
+              <p className="text-xs font-semibold text-white uppercase truncate">
+                {name || "YOUR NAME"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[8px] uppercase text-white/40 mb-0.5">Expires</p>
+              <p className="text-xs font-semibold text-white">{expiry || "MM/YY"}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Back */}
+        <div style={backStyle} className="shadow-(--shadow-elegant)">
+          <div className="mt-8 h-10 w-full bg-black/60" />
+          <div className="mt-4 px-5">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-9 rounded bg-white/20" style={{
+                backgroundImage: "repeating-linear-gradient(90deg,rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 4px,transparent 4px,transparent 8px)",
+              }} />
+              <div className="h-9 w-20 rounded bg-white flex items-center justify-center">
+                <p className="text-sm font-bold text-gray-800 font-mono tracking-widest">
+                  {cvv || "•••"}
+                </p>
+              </div>
+            </div>
+            <p className="mt-1 text-[9px] text-white/40 text-right uppercase tracking-widest">CVV / CVC</p>
+          </div>
+          <p className="mt-6 text-center text-[9px] text-white/30 uppercase tracking-widest">Autopayke · Powered by Paystack</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PayCard({ amount, token, onDone }: { amount: number; token: string; onDone: () => void }) {
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardName, setCardName] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [cvvFocused, setCvvFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const allFilled = cardNumber.replace(/\s/g, "").length >= 15 && cardName.trim().length >= 2 && cardExpiry.length === 5 && cardCvv.length >= 3;
+
   async function handlePay() {
+    if (!allFilled) { setError("Please fill in all card details"); return; }
     setError(null);
     setLoading(true);
     try {
@@ -151,26 +335,88 @@ function PayCard({ amount, token, onDone }: { amount: number; token: string; onD
 
   return (
     <div className="flex-1 flex flex-col mt-6">
-      <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Pay with card</p>
-      <h2 className="mt-2 text-2xl font-black">${amount.toFixed(2)} via Paystack</h2>
-      <div className="mt-4 rounded-2xl border border-border bg-card p-3 flex items-start gap-2">
-        <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-        <p className="text-[11px] text-muted-foreground">You'll be redirected to Paystack's secure card payment page. Your Autopayke wallet is credited once payment settles.</p>
+      {/* Mock card */}
+      <MockCard number={cardNumber} name={cardName} expiry={cardExpiry} cvv={cardCvv} flipped={cvvFocused} />
+
+      {/* Form */}
+      <div className="mt-5 space-y-3">
+        <div className="rounded-2xl border border-border bg-card p-3.5">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Card number</p>
+          <input
+            value={cardNumber}
+            onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+            placeholder="1234 5678 9012 3456"
+            inputMode="numeric"
+            maxLength={19}
+            className="mt-1 w-full bg-transparent text-sm font-mono font-semibold outline-none placeholder:text-muted-foreground/40"
+          />
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-3.5">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Cardholder name</p>
+          <input
+            value={cardName}
+            onChange={(e) => setCardName(e.target.value.toUpperCase())}
+            placeholder="JOHN DOE"
+            autoCapitalize="characters"
+            className="mt-1 w-full bg-transparent text-sm font-semibold outline-none placeholder:text-muted-foreground/40"
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex-1 rounded-2xl border border-border bg-card p-3.5">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Expiry</p>
+            <input
+              value={cardExpiry}
+              onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+              placeholder="MM/YY"
+              inputMode="numeric"
+              maxLength={5}
+              className="mt-1 w-full bg-transparent text-sm font-mono font-semibold outline-none placeholder:text-muted-foreground/40"
+            />
+          </div>
+          <div className="flex-1 rounded-2xl border border-border bg-card p-3.5">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">CVV</p>
+            <input
+              value={cardCvv}
+              onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onFocus={() => setCvvFocused(true)}
+              onBlur={() => setCvvFocused(false)}
+              placeholder="•••"
+              inputMode="numeric"
+              maxLength={4}
+              type="password"
+              className="mt-1 w-full bg-transparent text-sm font-mono font-semibold outline-none placeholder:text-muted-foreground/40"
+            />
+          </div>
+        </div>
       </div>
-      {error && <div className="mt-3 flex items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
-      <div className="mt-auto pt-6">
-        <button onClick={handlePay} disabled={loading}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold text-primary-foreground shadow-(--shadow-elegant) disabled:opacity-60"
-          style={{ background: "var(--gradient-portfolio)" }}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {loading ? "Redirecting…" : `Pay $${amount.toFixed(2)} with card`}
+
+      {error && (
+        <div className="mt-3 flex items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />{error}
+        </div>
+      )}
+
+      <div className="mt-auto pt-5">
+        <button
+          onClick={handlePay}
+          disabled={loading || !allFilled}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold text-primary-foreground shadow-(--shadow-elegant) disabled:opacity-40"
+          style={{ background: "var(--gradient-portfolio)" }}
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+          {loading ? "Processing…" : `Pay ${amount.toFixed(2)} USDC`}
         </button>
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">Secured by Paystack · PCI DSS compliant</p>
       </div>
     </div>
   );
 }
 
-function PayMobile({ amount, token, onDone }: { amount: number; token: string; onDone: () => void }) {
+// ── Mobile money ──────────────────────────────────────────────────────────────
+
+function PayMobile({ amount, currency, token, onDone }: { amount: number; currency: string; token: string; onDone: () => void }) {
   const [loading, setLoading] = useState(false);
   const [displayText, setDisplayText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -201,7 +447,7 @@ function PayMobile({ amount, token, onDone }: { amount: number; token: string; o
         <div className="mt-6 rounded-2xl border border-border bg-card p-4">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">What happens next</p>
           <ul className="mt-2 space-y-1.5 text-xs text-muted-foreground">
-            <li className="flex items-start gap-2"><span className="text-primary font-bold mt-0.5">1.</span> Approve the payment prompt on your phone</li>
+            <li className="flex items-start gap-2"><span className="text-primary font-bold mt-0.5">1.</span> Approve the {currency} {amount.toLocaleString()} payment prompt</li>
             <li className="flex items-start gap-2"><span className="text-primary font-bold mt-0.5">2.</span> We receive confirmation from Paystack</li>
             <li className="flex items-start gap-2"><span className="text-primary font-bold mt-0.5">3.</span> USDC is credited to your Autopayke wallet</li>
           </ul>
@@ -218,24 +464,30 @@ function PayMobile({ amount, token, onDone }: { amount: number; token: string; o
   return (
     <div className="flex-1 flex flex-col mt-6">
       <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Mobile money</p>
-      <h2 className="mt-2 text-2xl font-black">${amount.toFixed(2)} via M-Pesa / MoMo</h2>
+      <h2 className="mt-2 text-2xl font-black">{currency} {amount.toLocaleString()} via M-Pesa / MoMo</h2>
       <p className="mt-2 text-sm text-muted-foreground">A payment prompt will be sent to your registered mobile money number.</p>
       <div className="mt-4 rounded-2xl border border-border bg-card p-4 flex items-start gap-2">
         <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-        <p className="text-[11px] text-muted-foreground">Powered by Paystack. Your phone number on file: <span className="font-semibold text-foreground">{token ? "••••" : "—"}</span></p>
+        <p className="text-[11px] text-muted-foreground">Powered by Paystack. The STK push goes to your registered phone number on file.</p>
       </div>
-      {error && <div className="mt-3 flex items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
+      {error && (
+        <div className="mt-3 flex items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />{error}
+        </div>
+      )}
       <div className="mt-auto pt-6">
         <button onClick={handlePay} disabled={loading}
           className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold text-primary-foreground shadow-(--shadow-elegant) disabled:opacity-60"
           style={{ background: "var(--gradient-portfolio)" }}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
-          {loading ? "Sending prompt…" : "Send payment prompt"}
+          {loading ? "Sending prompt…" : `Send ${currency} ${amount.toLocaleString()} payment prompt`}
         </button>
       </div>
     </div>
   );
 }
+
+// ── Bank transfer ─────────────────────────────────────────────────────────────
 
 function PayBank({ token, onDone }: { token: string; onDone: () => void }) {
   const { data, isLoading, error } = useQuery({
@@ -248,9 +500,9 @@ function PayBank({ token, onDone }: { token: string; onDone: () => void }) {
     <div className="flex-1 flex flex-col mt-6">
       <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Bank transfer</p>
       <h2 className="mt-2 text-2xl font-black">Send to virtual account</h2>
-      <p className="mt-2 text-sm text-muted-foreground">Use these details. We auto-detect your payment and credit your wallet.</p>
+      <p className="mt-2 text-sm text-muted-foreground">We auto-detect your payment and credit your wallet.</p>
       {isLoading && <div className="mt-5 h-40 rounded-3xl bg-card border border-border animate-pulse" />}
-      {error && <p className="mt-4 text-xs text-destructive">Couldn't load bank details. Pull to refresh.</p>}
+      {error && <p className="mt-4 text-xs text-destructive">Couldn't load bank details.</p>}
       {data && (
         <div className="mt-5 rounded-3xl border border-border bg-card divide-y divide-border">
           <Row k="Bank" v={data.bankName} />
@@ -267,6 +519,8 @@ function PayBank({ token, onDone }: { token: string; onDone: () => void }) {
     </div>
   );
 }
+
+// ── Crypto deposit ────────────────────────────────────────────────────────────
 
 function PayCrypto({ token, onDone }: { token: string; onDone: () => void }) {
   const [copied, setCopied] = useState(false);
