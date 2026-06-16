@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { SendOtpSchema, VerifyOtpSchema } from "@tuma/shared";
 import { generateOtp, hashPhone, hashToken } from "../lib/crypto";
 import { setex, getJson, del, incr, keys } from "../lib/redis";
-import { sendOtpWhatsApp } from "../services/whatsapp";
+import { sendOtpSms } from "../services/sms";
 import {
   signAccessToken,
   signRefreshToken,
@@ -41,9 +41,9 @@ authRouter.post("/send-otp", otpSendLimiter, zValidator("json", SendOtpSchema), 
   const otp = generateOtp();
   await setex(keys.otp(phone), OTP_TTL, { otp, attempts: 0 });
 
-  await sendOtpWhatsApp(phone, otp);
+  await sendOtpSms(phone, otp);
 
-  return c.json({ ok: true, data: { message: "OTP sent via WhatsApp", expiresIn: OTP_TTL } });
+  return c.json({ ok: true, data: { message: "OTP sent via SMS", expiresIn: OTP_TTL } });
 });
 
 // POST /api/auth/verify-otp
