@@ -60,7 +60,7 @@ contract TumaEscrowTest is Test {
         assertEq(_sender, sender);
         assertEq(_token, address(usdc));
         assertEq(_amount, AMOUNT);
-        assertEq(_status, TumaEscrow.EscrowStatus.Pending);
+        assertEq(uint8(_status), uint8(TumaEscrow.EscrowStatus.Pending));
         assertTrue(_expiry > block.timestamp);
         assertEq(usdc.balanceOf(address(escrow)), AMOUNT);
     }
@@ -130,7 +130,7 @@ contract TumaEscrowTest is Test {
         assertEq(usdc.balanceOf(address(escrow)), 0);
 
         (,,, , TumaEscrow.EscrowStatus status) = escrow.getPayment(CLAIM_REF);
-        assertEq(status, TumaEscrow.EscrowStatus.Claimed);
+        assertEq(uint8(status), uint8(TumaEscrow.EscrowStatus.Claimed));
     }
 
     function test_claim_emitsEvent() public {
@@ -188,7 +188,7 @@ contract TumaEscrowTest is Test {
         assertEq(usdc.balanceOf(address(escrow)), 0);
 
         (,,,, TumaEscrow.EscrowStatus status) = escrow.getPayment(CLAIM_REF);
-        assertEq(status, TumaEscrow.EscrowStatus.Refunded);
+        assertEq(uint8(status), uint8(TumaEscrow.EscrowStatus.Refunded));
     }
 
     function test_refund_revertsBeforeExpiry() public {
