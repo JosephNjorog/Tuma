@@ -35,7 +35,7 @@
 services:
   # ── Backend API ─────────────────────────────────────────────────────────────
   - type: web
-    name: autopayke-api
+    name: tumabackendservice
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
@@ -144,9 +144,9 @@ services:
       # if Vercel serves a custom domain, it must be listed here too or the
       # browser will reject API calls with a CORS error.
       - key: CORS_ORIGINS
-        value: https://autopayke.vercel.app,https://autopayke.com
+        value: https://autopayke.com,https://autopayke.vercel.app
       - key: API_BASE_URL
-        value: https://autopayke-api.onrender.com
+        value: https://tumabackendservice.onrender.com
       - key: APP_URL
         value: https://autopayke.com
 
