@@ -130,7 +130,7 @@ export async function initiateMobileMoneyCharge(
   }>("/charge", {
     method: "POST",
     body: JSON.stringify({
-      email: `${phone.replace(/\D/g, "")}@tuma.user`,
+      email: `${phone.replace(/\D/g, "")}@autopayke.com`,
       amount: Math.round(amountLocal * 100),
       currency,
       reference: ref,

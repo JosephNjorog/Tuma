@@ -61,7 +61,7 @@ fundRouter.post(
 
     const reference = generateTxRef();
     const successUrl = `${process.env.APP_URL}/dashboard?funded=1&ref=${reference}`;
-    const email = `${phone.replace(/\D/g, "")}@tuma.user`;
+    const email = `${phone.replace(/\D/g, "")}@autopayke.com`;
 
     const { authorizationUrl, accessCode } = await initializeCardPayment(
       email,
