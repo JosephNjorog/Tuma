@@ -42,9 +42,9 @@ function Receive() {
           <Link to="/dashboard" className="h-9 w-9 rounded-full border border-border bg-card flex items-center justify-center">
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <h1 className="text-sm font-bold">My TUMA Passport</h1>
+          <h1 className="text-sm font-bold">My Autopayke Passport</h1>
           <button
-            onClick={() => navigator.share?.({ title: "TUMA — Pay me", text: `Send money to ${phone} on TUMA` })}
+            onClick={() => navigator.share?.({ title: "Autopayke — Pay me", text: `Send money to ${phone} on Autopayke` })}
             className="h-9 w-9 rounded-full border border-border bg-card flex items-center justify-center">
             <Share2 className="h-4 w-4" />
           </button>
@@ -54,7 +54,7 @@ function Receive() {
           <div className="absolute -inset-4 rounded-[2rem] opacity-30 blur-2xl" style={{ background: "var(--gradient-portfolio)" }} />
           <div className="relative rounded-[2rem] p-6 text-primary-foreground" style={{ background: "var(--gradient-portfolio)" }}>
             <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-[0.3em] opacity-80">TUMA Passport</span>
+              <span className="text-xs uppercase tracking-[0.3em] opacity-80">Autopayke Passport</span>
               <span className="text-2xl">{flag}</span>
             </div>
             <div className="mt-5 rounded-2xl bg-background p-5">
@@ -63,7 +63,7 @@ function Receive() {
             <div className="mt-5">
               <p className="text-[10px] uppercase tracking-wider opacity-80">Pay this number</p>
               <p className="mt-1 text-2xl font-black">{phone}</p>
-              <p className="text-xs opacity-80 mt-1">TUMA · Avalanche C-Chain</p>
+              <p className="text-xs opacity-80 mt-1">Autopayke · Avalanche C-Chain</p>
             </div>
           </div>
         </div>
@@ -94,7 +94,7 @@ function Receive() {
           </div>
         </div>
 
-        <p className="mt-5 text-center text-[11px] text-muted-foreground">Anyone can scan this QR or send to your number — even if they don't use TUMA.</p>
+        <p className="mt-5 text-center text-[11px] text-muted-foreground">Anyone can scan this QR or send to your number — even if they don't use Autopayke.</p>
       </div>
     </MobileFrame>
   );
@@ -113,7 +113,7 @@ function QrPattern({ seed }: { seed: string }) {
     return ((x * 31 + y * 17 + x * y + hash) % 7) < 3 ? 1 : 0;
   });
   return (
-    <div className="grid gap-[2px] aspect-square" style={{ gridTemplateColumns: "repeat(21, 1fr)" }}>
+    <div className="grid gap-0.5 aspect-square" style={{ gridTemplateColumns: "repeat(21, 1fr)" }}>
       {cells.map((c, i) => (
         <div key={i} className={c ? "bg-foreground rounded-[1px]" : "bg-transparent"} />
       ))}
