@@ -5,6 +5,7 @@ import {
   boolean,
   timestamp,
   numeric,
+  integer,
   pgEnum,
   jsonb,
   index,
@@ -139,6 +140,7 @@ export const transactions = pgTable(
     escrowRef: text("escrow_ref"),
     isMerchantPayment: boolean("is_merchant_payment").default(false).notNull(),
     merchantId: uuid("merchant_id").references(() => users.id),
+    feeUsdc: numeric("fee_usdc", { precision: 20, scale: 6 }).default("0").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
     settledAt: timestamp("settled_at"),
@@ -212,6 +214,9 @@ export const merchantSettings = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     businessName: text("business_name").notNull(),
     tillOpen: boolean("till_open").default(false).notNull(),
+    // TUMA's settlement fee on merchant volume (basis points, 100 = 1.00%).
+    // Not exposed in the merchant-facing settings API — platform-controlled.
+    feeBps: integer("fee_bps").default(100).notNull(),
     autoSettleTo: text("auto_settle_to").notNull(),
     settleRail: railEnum("settle_rail").notNull(),
     settleSchedule: settlementScheduleEnum("settle_schedule")
