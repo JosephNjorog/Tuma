@@ -1,6 +1,6 @@
 import Redis from "ioredis";
 
-// ── In-memory fallback (dev / demo when REDIS_URL is not set) ────────────────
+// ── In-memory fallback ────────────────────────────────────────────────────────
 type MemEntry = { value: string; expiresAt: number | null };
 const _mem = new Map<string, MemEntry>();
 
@@ -30,23 +30,43 @@ const _memStore = {
   },
 };
 
-// ── Real Redis (required in production) ──────────────────────────────────────
+// ── Real Redis ────────────────────────────────────────────────────────────────
 const redisUrl = process.env.REDIS_URL;
 
-if (!redisUrl && process.env.NODE_ENV === "production") {
-  throw new Error("REDIS_URL is required in production");
-}
-
 let _redis: Redis | null = null;
+let _redisReady = false;
+
 if (redisUrl) {
   _redis = new Redis(redisUrl, {
-    maxRetriesPerRequest: 3,
-    enableReadyCheck: true,
-    lazyConnect: false,
+    maxRetriesPerRequest: 1,
+    enableReadyCheck: false,
+    lazyConnect: true,
+    connectTimeout: 5000,
+    commandTimeout: 4000,
+    tls: redisUrl.startsWith("rediss://") ? { rejectUnauthorized: false } : undefined,
   });
-  _redis.on("error", (err) => console.error("[Redis] Connection error:", err.message));
+
+  _redis.on("ready", () => {
+    _redisReady = true;
+    console.log("[Redis] Connected");
+  });
+  _redis.on("error", (err) => {
+    _redisReady = false;
+    console.error("[Redis] Error:", err.message);
+  });
+  _redis.on("close", () => { _redisReady = false; });
+
+  _redis.connect().catch((err) => {
+    console.warn("[Redis] Initial connect failed — using in-memory fallback:", err.message);
+    _redis = null;
+  });
 } else {
-  console.warn("[Redis] REDIS_URL not set — using in-memory store (dev/demo only)");
+  console.warn("[Redis] REDIS_URL not set — using in-memory store");
+}
+
+// Returns the redis client if it's ready, otherwise null (falls back to memory)
+function store(): Redis | null {
+  return _redis && _redisReady ? _redis : null;
 }
 
 // ── Key helpers ───────────────────────────────────────────────────────────────
@@ -60,31 +80,31 @@ export const keys = {
   walletNonce: (address: string) => `nonce:${address}`,
 };
 
-// ── Typed helpers (delegates to Redis or in-memory) ───────────────────────────
+// ── Typed helpers ─────────────────────────────────────────────────────────────
 export async function setex<T>(key: string, ttlSeconds: number, value: T): Promise<void> {
+  const s = store();
   const serialized = JSON.stringify(value);
-  if (_redis) {
-    await _redis.setex(key, ttlSeconds, serialized);
-  } else {
-    await _memStore.setex(key, ttlSeconds, serialized);
-  }
+  if (s) await s.setex(key, ttlSeconds, serialized);
+  else await _memStore.setex(key, ttlSeconds, serialized);
 }
 
 export async function getJson<T>(key: string): Promise<T | null> {
-  const raw = _redis ? await _redis.get(key) : await _memStore.get(key);
+  const s = store();
+  const raw = s ? await s.get(key) : await _memStore.get(key);
   if (!raw) return null;
   try { return JSON.parse(raw) as T; } catch { return null; }
 }
 
 export async function del(key: string): Promise<void> {
-  if (_redis) await _redis.del(key);
-  else await _memStore.del(key);
+  const s = store();
+  if (s) await s.del(key); else await _memStore.del(key);
 }
 
 export async function incr(key: string, ttlSeconds?: number): Promise<number> {
-  if (_redis) {
-    const count = await _redis.incr(key);
-    if (ttlSeconds && count === 1) await _redis.expire(key, ttlSeconds);
+  const s = store();
+  if (s) {
+    const count = await s.incr(key);
+    if (ttlSeconds && count === 1) await s.expire(key, ttlSeconds);
     return count;
   }
   const count = await _memStore.incr(key);
