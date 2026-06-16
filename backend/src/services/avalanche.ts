@@ -34,14 +34,22 @@ export const publicClient = createPublicClient({
   transport: http(rpcUrl),
 });
 
-// Relayer account — signs transactions on behalf of TUMA
-const relayerAccount = privateKeyToAccount(process.env.RELAYER_PRIVATE_KEY! as `0x${string}`);
+// Relayer client — lazily initialized so a missing key doesn't crash startup.
+// Blockchain write operations will throw BlockchainError if key is not set.
+let _relayerClient: ReturnType<typeof createWalletClient> | null = null;
 
-export const relayerClient = createWalletClient({
-  account: relayerAccount,
-  chain,
-  transport: http(rpcUrl),
-});
+function requireRelayer() {
+  if (_relayerClient) return _relayerClient;
+  const key = process.env.RELAYER_PRIVATE_KEY;
+  if (!key || !/^0x[0-9a-fA-F]{64}$/.test(key)) {
+    throw new BlockchainError(
+      "RELAYER_PRIVATE_KEY is not configured — blockchain write operations are disabled"
+    );
+  }
+  const account = privateKeyToAccount(key as `0x${string}`);
+  _relayerClient = createWalletClient({ account, chain, transport: http(rpcUrl) });
+  return _relayerClient;
+}
 
 // ── Token addresses ───────────────────────────────────────────────────────────
 
@@ -225,7 +233,7 @@ export async function deploySmartWallet(phoneHash: string): Promise<Address> {
 
   const userAccount = getUserAccount(phoneHash);
 
-  const hash = await relayerClient.writeContract({
+  const hash = await requireRelayer().writeContract({
     address: factoryAddress,
     abi: TUMA_FACTORY_ABI,
     functionName: "createWallet",
@@ -334,7 +342,7 @@ export async function transferUsdc(
     args: [toAddress, amountRaw],
   });
 
-  const hash = await relayerClient.writeContract({
+  const hash = await requireRelayer().writeContract({
     address: fromWalletAddress,
     abi: SMART_WALLET_ABI,
     functionName: "execute",
@@ -359,7 +367,7 @@ export async function approveEscrow(
     args: [escrowAddress, amountRaw],
   });
 
-  const hash = await relayerClient.writeContract({
+  const hash = await requireRelayer().writeContract({
     address: fromWalletAddress,
     abi: SMART_WALLET_ABI,
     functionName: "execute",
@@ -383,7 +391,7 @@ export async function registerWalletOnChain(
   const registryAddress = process.env.TUMA_REGISTRY_ADDRESS as Address | undefined;
   if (!registryAddress || registryAddress === "0x") return;
 
-  const hash = await relayerClient.writeContract({
+  const hash = await requireRelayer().writeContract({
     address: registryAddress,
     abi: TUMA_REGISTRY_ABI,
     functionName: "registerWallet",
@@ -420,7 +428,7 @@ export async function depositToEscrow(
     args: [claimRefBytes32, TOKEN_ADDRESSES.USDC, amountRaw, EXPIRY_OFFSET],
   });
 
-  const hash = await relayerClient.writeContract({
+  const hash = await requireRelayer().writeContract({
     address: senderWalletAddress,
     abi: SMART_WALLET_ABI,
     functionName: "execute",
@@ -447,7 +455,7 @@ export async function claimEscrowOnChain(
 
   const claimRefBytes32 = stringToBytes32(escrowRef);
 
-  const hash = await relayerClient.writeContract({
+  const hash = await requireRelayer().writeContract({
     address: escrowAddress,
     abi: TUMA_ESCROW_ABI,
     functionName: "claim",
@@ -469,7 +477,7 @@ export async function creditFromFloat(
 ): Promise<Hash> {
   const amountRaw = parseUnits(amountUsd.toFixed(6), 6);
 
-  const hash = await relayerClient.writeContract({
+  const hash = await requireRelayer().writeContract({
     address: TOKEN_ADDRESSES.USDC,
     abi: ERC20_ABI,
     functionName: "transfer",
@@ -499,7 +507,7 @@ export async function sponsorWallet(walletAddress: Address): Promise<void> {
     },
   ] as const;
 
-  const hash = await relayerClient.writeContract({
+  const hash = await requireRelayer().writeContract({
     address: paymasterAddress,
     abi: PAYMASTER_APPROVE_ABI,
     functionName: "approveWallet",
