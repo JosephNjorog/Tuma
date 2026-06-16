@@ -11,7 +11,10 @@ const tabs = [
 export function BottomNav() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <div className="sticky bottom-0 left-0 right-0 z-40 pointer-events-none">
+    <div
+      className="sticky bottom-0 left-0 right-0 z-40 pointer-events-none"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="pointer-events-auto relative mx-3 mb-3 rounded-3xl bg-card/95 backdrop-blur border border-border shadow-[0_-4px_24px_-8px_oklch(0.18_0.02_50/0.15)]">
         <div className="grid grid-cols-5 items-end px-2 pt-2 pb-3">
           {tabs.slice(0, 2).map((t) => (

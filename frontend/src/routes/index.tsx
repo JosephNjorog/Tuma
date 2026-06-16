@@ -34,7 +34,8 @@ function IOSInstructions({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
       <div
-        className="w-full rounded-t-2xl bg-[#18182a] border-t border-white/10 p-6 pb-10"
+        className="w-full rounded-t-2xl bg-[#18182a] border-t border-white/10 p-6"
+        style={{ paddingBottom: "calc(2.5rem + env(safe-area-inset-bottom))" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
@@ -69,7 +70,8 @@ function AndroidInstructions({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
       <div
-        className="w-full rounded-t-2xl bg-[#18182a] border-t border-white/10 p-6 pb-10"
+        className="w-full rounded-t-2xl bg-[#18182a] border-t border-white/10 p-6"
+        style={{ paddingBottom: "calc(2.5rem + env(safe-area-inset-bottom))" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
@@ -237,7 +239,10 @@ function Index() {
 
       {/* Install banner — slides up after 2.5s */}
       {showBanner && !installed && !showIOSSheet && !showAndroidSheet && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none">
+        <div
+          className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
           <div className="pointer-events-auto w-full max-w-sm mx-4 mb-4 rounded-2xl border border-white/10 bg-[#18182a]/95 backdrop-blur-xl p-4 shadow-2xl flex items-center gap-3">
             <div className="h-12 w-12 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-white bg-linear-to-br from-violet-500 to-purple-700 text-lg">A</div>
             <div className="flex-1 min-w-0">
