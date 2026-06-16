@@ -132,6 +132,19 @@ export const api = {
         body: JSON.stringify({ refreshToken }),
         token,
       }),
+
+    setPassword: (email: string, password: string, token: string) =>
+      request<{ message: string }>("/api/auth/set-password", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+        token,
+      }),
+
+    login: (email: string, password: string) =>
+      request<AuthResponse>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      }),
   },
 
   wallet: {
