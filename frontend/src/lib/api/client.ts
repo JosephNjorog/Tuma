@@ -68,6 +68,15 @@ export type FxQuote = {
 
 export type TxStatus = "initiated" | "onchain" | "routed" | "settled" | "failed" | "expired";
 
+export type Notification = {
+  id: string;
+  kind: "received" | "settled" | "failed";
+  title: string;
+  body: string;
+  createdAt: string;
+  read: boolean;
+};
+
 export type TxSummary = {
   id: string;
   reference: string;
@@ -285,5 +294,13 @@ export const api = {
         localCurrency: string;
         rail: string;
       }>("/api/claim", { method: "POST", body: JSON.stringify({ ref }), token }),
+  },
+
+  notifications: {
+    list: (token: string) =>
+      request<{ notifications: Notification[]; unread: number }>("/api/notifications", { token }),
+
+    markSeen: (token: string) =>
+      request<Record<string, never>>("/api/notifications/seen", { method: "POST", token }),
   },
 };
