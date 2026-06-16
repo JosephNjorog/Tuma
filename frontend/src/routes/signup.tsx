@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, ShieldCheck, ChevronDown, Check, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, ShieldCheck, ChevronDown, Check, Loader2, Sparkles, AlertCircle, Mail, Lock } from "lucide-react";
 import { MobileFrame } from "@/components/MobileFrame";
 import { countries } from "@/lib/tuma-data";
 import { api, ApiError } from "@/lib/api/client";
@@ -11,11 +11,11 @@ export const Route = createFileRoute("/signup")({
   component: Signup,
 });
 
-type Step = "phone" | "otp" | "creating" | "done";
+type Step = "phone" | "otp" | "creating" | "secure" | "done";
 
 function Signup() {
   const navigate = useNavigate();
-  const { setAuth } = useAuthStore();
+  const { setAuth, accessToken } = useAuthStore();
   const [step, setStep] = useState<Step>("phone");
   const [country, setCountry] = useState(countries[0]);
   const [open, setOpen] = useState(false);
@@ -24,6 +24,8 @@ function Signup() {
   const [resendIn, setResendIn] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const fullPhone = `${country.dial}${phone.replace(/\D/g, "")}`;
   const valid = phone.replace(/\D/g, "").length >= 9;
@@ -38,9 +40,22 @@ function Signup() {
 
   useEffect(() => {
     if (step !== "creating") return;
-    const t = setTimeout(() => setStep("done"), 2200);
+    const t = setTimeout(() => setStep("secure"), 2200);
     return () => clearTimeout(t);
   }, [step]);
+
+  async function handleSetPassword() {
+    setError(null);
+    setLoading(true);
+    try {
+      await api.auth.setPassword(email, password, accessToken!);
+      setStep("done");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Failed to set password. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleSendOtp() {
     setError(null);
@@ -99,8 +114,8 @@ function Signup() {
           </Link>
           <div className="flex gap-1.5">
             {(["phone", "otp", "done"] as const).map((s, i) => {
-              const idx = ["phone", "otp", "creating", "done"].indexOf(step);
-              const active = i <= [0, 1, 2, 2][idx];
+              const idx = ["phone", "otp", "creating", "secure", "done"].indexOf(step);
+              const active = i <= [0, 1, 2, 2, 2][idx];
               return <span key={s} className={`h-1.5 w-6 rounded-full transition ${active ? "bg-primary" : "bg-border"}`} />;
             })}
           </div>
@@ -235,6 +250,47 @@ function Signup() {
               <li className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin text-primary" /> Linking to your local rail…</li>
             </ul>
           </div>
+        )}
+
+        {step === "secure" && (
+          <>
+            <div className="mt-10">
+              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Step 3 of 3</p>
+              <h1 className="mt-3 text-4xl font-black tracking-tight leading-[1.05]">Skip the code<br />next time</h1>
+              <p className="mt-3 text-sm text-muted-foreground">Set an email and password so you can log in instantly on any device — no waiting on a text message.</p>
+            </div>
+
+            <div className="mt-8 space-y-3">
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><Mail className="h-3 w-3" /> Email</p>
+                <input
+                  type="email" inputMode="email" placeholder="you@example.com"
+                  value={email} onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1 w-full bg-transparent text-lg font-bold outline-none placeholder:text-muted-foreground/40"
+                />
+              </div>
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><Lock className="h-3 w-3" /> Password</p>
+                <input
+                  type="password" placeholder="At least 8 characters"
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1 w-full bg-transparent text-lg font-bold outline-none placeholder:text-muted-foreground/40"
+                />
+              </div>
+            </div>
+
+            <div className="mt-auto pt-8 space-y-2">
+              <button
+                disabled={!email || password.length < 8 || loading}
+                onClick={handleSetPassword}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-sm font-semibold text-primary-foreground transition disabled:opacity-40 disabled:cursor-not-allowed shadow-(--shadow-elegant)"
+                style={{ background: "var(--gradient-portfolio)" }}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {loading ? "Saving…" : "Set it up"} {!loading && <ArrowRight className="h-4 w-4" />}
+              </button>
+              <button onClick={() => { setError(null); setStep("done"); }} className="w-full text-center text-[11px] text-muted-foreground py-2">Skip for now</button>
+            </div>
+          </>
         )}
 
         {step === "done" && (
