@@ -3,6 +3,12 @@ pragma solidity ^0.8.24;
 
 import "./UserOperation.sol";
 
+interface IAggregator {
+    function validateSignatures(UserOperation[] calldata userOps, bytes calldata signature) external view;
+    function validateUserOpSignature(UserOperation calldata userOp) external view returns (bytes memory sigForUserOp);
+    function aggregateSignatures(UserOperation[] calldata userOps) external view returns (bytes memory aggregatedSignature);
+}
+
 interface IEntryPoint {
     /**
      * Execute a batch of UserOperations.
@@ -62,11 +68,5 @@ interface IEntryPoint {
         UserOperation[] userOps;
         IAggregator aggregator;
         bytes signature;
-    }
-
-    interface IAggregator {
-        function validateSignatures(UserOperation[] calldata userOps, bytes calldata signature) external view;
-        function validateUserOpSignature(UserOperation calldata userOp) external view returns (bytes memory sigForUserOp);
-        function aggregateSignatures(UserOperation[] calldata userOps) external view returns (bytes memory aggregatedSignature);
     }
 }
