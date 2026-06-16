@@ -52,10 +52,35 @@ function requireRelayer() {
 }
 
 // ── Token addresses ───────────────────────────────────────────────────────────
+// Defaults are network-aware: mainnet defaults are the real Circle USDC /
+// Tether USDT contracts on Avalanche C-Chain; testnet defaults are Circle's
+// official USDC faucet contract on Fuji (no canonical Fuji USDT exists, so
+// USDT requires an explicit USDT_ADDRESS override on testnet).
+// All defaults verified on-chain (symbol()/decimals()) — the previous mainnet
+// USDC default was missing its last hex digit and silently failing viem's
+// address validation on every balance/transfer call.
 
-export const TOKEN_ADDRESSES: Record<string, Address> = {
-  USDC: (process.env.USDC_ADDRESS ?? "0xB97Ef9ef8734c71904d8002F8b6bc66dD9C48a6") as Address,
-  USDT: (process.env.USDT_ADDRESS ?? "0x9702230a8Ea53601F5cd2DC00fdbc13D4dF4a8c3") as Address,
+const MAINNET_TOKEN_ADDRESSES: Record<string, Address> = {
+  USDC: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+  USDT: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
+};
+
+const FUJI_USDC_ADDRESS: Address = "0x5425890298aed601595a70AB815c96711a31Bc65";
+
+export const TOKEN_ADDRESSES: {
+  USDC: Address;
+  USDT: Address | undefined;
+} = {
+  USDC: (process.env.USDC_ADDRESS ??
+    (isTestnet ? FUJI_USDC_ADDRESS : MAINNET_TOKEN_ADDRESSES.USDC)) as Address,
+  // No canonical USDT test contract exists on Fuji — leave unset there unless
+  // USDT_ADDRESS is explicitly provided. getWalletBalances() treats a missing
+  // address as a zero balance rather than failing the whole wallet view.
+  USDT: process.env.USDT_ADDRESS
+    ? (process.env.USDT_ADDRESS as Address)
+    : isTestnet
+    ? undefined
+    : MAINNET_TOKEN_ADDRESSES.USDT,
 };
 
 // ── Contract ABIs (minimal) ───────────────────────────────────────────────────
@@ -260,19 +285,26 @@ export async function getWalletBalances(
   usdcPriceUsd = 1.0,
   usdtPriceUsd = 1.0
 ): Promise<TokenBalance[]> {
+  // Each token balance is fetched independently — a missing/misconfigured
+  // token address (e.g. no canonical USDT test contract on Fuji) shouldn't
+  // take down the whole wallet view.
+  async function safeBalanceOf(address: Address | undefined): Promise<bigint> {
+    if (!address) return 0n;
+    try {
+      return (await publicClient.readContract({
+        address,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [walletAddress],
+      })) as bigint;
+    } catch {
+      return 0n;
+    }
+  }
+
   const [usdcBalance, usdtBalance, avaxBalance] = await Promise.all([
-    publicClient.readContract({
-      address: TOKEN_ADDRESSES.USDC,
-      abi: ERC20_ABI,
-      functionName: "balanceOf",
-      args: [walletAddress],
-    }),
-    publicClient.readContract({
-      address: TOKEN_ADDRESSES.USDT,
-      abi: ERC20_ABI,
-      functionName: "balanceOf",
-      args: [walletAddress],
-    }),
+    safeBalanceOf(TOKEN_ADDRESSES.USDC),
+    safeBalanceOf(TOKEN_ADDRESSES.USDT),
     publicClient.getBalance({ address: walletAddress }),
   ]);
 
@@ -292,7 +324,7 @@ export async function getWalletBalances(
     },
     {
       symbol: "USDT",
-      address: TOKEN_ADDRESSES.USDT,
+      address: TOKEN_ADDRESSES.USDT ?? "not configured on this network",
       balance: usdt.toFixed(6),
       balanceUsd: usdt * usdtPriceUsd,
       decimals: 6,
