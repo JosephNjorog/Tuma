@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Download, Phone, Globe2, Zap, ShieldCheck, ArrowRight, Share } from "lucide-react";
+import { Download, Phone, Globe2, Zap, ShieldCheck, ArrowRight, Share, MoreVertical } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePwaInstall } from "../lib/use-pwa-install";
 
@@ -65,9 +65,50 @@ function IOSInstructions({ onClose }: { onClose: () => void }) {
   );
 }
 
+function AndroidInstructions({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+      <div
+        className="w-full rounded-t-2xl bg-[#18182a] border-t border-white/10 p-6 pb-10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
+        <h3 className="text-base font-semibold text-white mb-1">Add Autopayke to Home Screen</h3>
+        <p className="text-sm text-white/50 mb-4">
+          Your browser didn't offer an install prompt — add it manually from Chrome:
+        </p>
+        <ol className="space-y-3 text-sm text-white/80">
+          <li className="flex items-start gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">1</span>
+            <span>Tap the <MoreVertical className="inline h-4 w-4 -mt-0.5" /> menu in the top-right corner</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">2</span>
+            <span>Tap <strong className="text-white">Add to Home screen</strong> (or <strong className="text-white">Install app</strong>)</span>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">3</span>
+            <span>Confirm by tapping <strong className="text-white">Add</strong> or <strong className="text-white">Install</strong></span>
+          </li>
+        </ol>
+        <p className="mt-4 text-xs text-white/30">
+          Only Chrome and other Chromium-based browsers support installing Autopayke on Android — Firefox and in-app browsers (Instagram, WhatsApp, etc.) don't.
+        </p>
+        <button
+          onClick={onClose}
+          className="mt-6 w-full rounded-xl bg-white/10 py-3 text-sm font-semibold text-white hover:bg-white/15 transition"
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Index() {
-  const { canInstall, install, installed, isIOS } = usePwaInstall();
+  const { canInstall, install, installed, isIOS, isAndroid } = usePwaInstall();
   const [showIOSSheet, setShowIOSSheet] = useState(false);
+  const [showAndroidSheet, setShowAndroidSheet] = useState(false);
   const [showBanner, setShowBanner] = useState(false);
 
   // Show install banner after 2.5 seconds if not already installed
@@ -78,12 +119,18 @@ function Index() {
   }, [installed]);
 
   const handleGetApp = () => {
-    if (isIOS) {
-      setShowIOSSheet(true);
-    } else if (canInstall) {
+    if (canInstall && !isIOS) {
+      // Real beforeinstallprompt available (Chrome/Chromium on Android or desktop)
       install();
+    } else if (isIOS) {
+      setShowIOSSheet(true);
+    } else if (isAndroid) {
+      // Android but no beforeinstallprompt fired (already dismissed, non-Chromium
+      // browser, or in-app webview) — give Chrome's manual menu steps instead of
+      // the iOS Safari instructions.
+      setShowAndroidSheet(true);
     } else {
-      // Desktop or unsupported — show iOS-style instructions adapted for desktop
+      // Desktop browser without native install support
       setShowIOSSheet(true);
     }
   };
@@ -189,7 +236,7 @@ function Index() {
       </footer>
 
       {/* Install banner — slides up after 2.5s */}
-      {showBanner && !installed && !showIOSSheet && (
+      {showBanner && !installed && !showIOSSheet && !showAndroidSheet && (
         <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none">
           <div className="pointer-events-auto w-full max-w-sm mx-4 mb-4 rounded-2xl border border-white/10 bg-[#18182a]/95 backdrop-blur-xl p-4 shadow-2xl flex items-center gap-3">
             <div className="h-12 w-12 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-white bg-linear-to-br from-violet-500 to-purple-700 text-lg">A</div>
@@ -211,6 +258,7 @@ function Index() {
 
       {/* iOS / Desktop instructions sheet */}
       {showIOSSheet && <IOSInstructions onClose={() => setShowIOSSheet(false)} />}
+      {showAndroidSheet && <AndroidInstructions onClose={() => setShowAndroidSheet(false)} />}
     </div>
   );
 }
