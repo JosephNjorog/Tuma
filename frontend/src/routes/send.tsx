@@ -10,8 +10,14 @@ import { countries, midRates, type Contact } from "@/lib/tuma-data";
 import { api, type FxQuote, ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth-store";
 
+type SendSearch = { to?: string; amount?: string };
+
 export const Route = createFileRoute("/send")({
   head: () => ({ meta: [{ title: "Send · Autopayke" }, { name: "description", content: "Send money to any African phone number." }] }),
+  validateSearch: (search: Record<string, unknown>): SendSearch => ({
+    to: typeof search.to === "string" ? search.to : undefined,
+    amount: typeof search.amount === "string" ? search.amount : undefined,
+  }),
   component: SendPage,
 });
 
@@ -33,6 +39,7 @@ function getLocalCurrency(msisdn: string) {
 
 function SendPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const { accessToken, isLoggedIn } = useAuthStore();
   const [step, setStep] = useState<Step>("pick");
   const [recipient, setRecipient] = useState<Contact | null>(null);
@@ -48,6 +55,16 @@ function SendPage() {
   useEffect(() => {
     if (!isLoggedIn()) navigate({ to: "/signup" });
   }, [isLoggedIn, navigate]);
+
+  // Arrived from a scanned QR (or a deep link) with a recipient pre-filled.
+  useEffect(() => {
+    if (!search.to) return;
+    const country = countries.find((c) => search.to!.startsWith(c.dial));
+    setRecipient({ id: "scanned", name: search.to, msisdn: search.to, country: country?.name ?? "", flag: country?.flag ?? "🌍", rail: "" });
+    if (search.amount) setAmount(search.amount);
+    setStep("amount");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: wallet } = useQuery({
     queryKey: ["wallet"],
