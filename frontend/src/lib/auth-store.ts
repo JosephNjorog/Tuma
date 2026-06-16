@@ -34,7 +34,7 @@ export const useAuthStore = create<AuthState>()(
       isLoggedIn: () => !!get().accessToken,
     }),
     {
-      name: "tuma-auth",
+      name: "autopayke-auth",
       partialize: (s) => ({
         accessToken: s.accessToken,
         refreshToken: s.refreshToken,
