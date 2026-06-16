@@ -8,7 +8,7 @@ import { api, type FxQuote, ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/send")({
-  head: () => ({ meta: [{ title: "Send · TUMA" }, { name: "description", content: "Send money to any African phone number." }] }),
+  head: () => ({ meta: [{ title: "Send · Autopayke" }, { name: "description", content: "Send money to any African phone number." }] }),
   component: SendPage,
 });
 
@@ -156,7 +156,7 @@ function SendPage() {
                 <div>
                   <p className="text-sm font-semibold">SMS preview</p>
                   <p className="mt-1 text-[11px] text-muted-foreground italic">
-                    "Someone sent you {sendResult.localCurrency} {sendResult.amountLocal.toFixed(2)} on TUMA. Tap to claim: tuma.app/claim/…"
+                    "Someone sent you {sendResult.localCurrency} {sendResult.amountLocal.toFixed(2)} on Autopayke. Tap to claim: autopayke.com/claim/…"
                   </p>
                 </div>
               </div>
@@ -202,7 +202,7 @@ function PickRecipient({ onPick }: { onPick: (c: Contact) => void }) {
             <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center"><UserPlus className="h-4 w-4" /></div>
             <div className="flex-1">
               <p className="text-sm font-semibold">Send to {typed} {cc.flag}</p>
-              <p className="text-[11px] text-muted-foreground">Not on TUMA yet — we'll text them a claim link</p>
+              <p className="text-[11px] text-muted-foreground">Not on Autopayke yet — we'll text them a claim link</p>
             </div>
             <ArrowRight className="h-4 w-4 text-primary" />
           </button>
