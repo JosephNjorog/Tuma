@@ -7,7 +7,7 @@ import { api, type TxSummary } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/track/$id")({
-  head: ({ params }) => ({ meta: [{ title: `Track ${params.id} · TUMA` }, { name: "description", content: "Live cross-border settlement tracker." }] }),
+  head: ({ params }) => ({ meta: [{ title: `Track ${params.id} · Autopayke` }, { name: "description", content: "Live cross-border settlement tracker." }] }),
   component: Track,
 });
 
@@ -69,7 +69,7 @@ function Track() {
   const steps = [
     { title: "Initiated", desc: "You signed and broadcast the transfer" },
     { title: "On-chain confirmed", desc: "Avalanche finality reached in ~1s" },
-    { title: "Routed to rail", desc: `TUMA selected ${tx.rail}` },
+    { title: "Routed to rail", desc: `Autopayke selected ${tx.rail}` },
     { title: isFailed ? "Failed" : "Settled", desc: isFailed ? (tx.status === "expired" ? "Transfer expired" : "Settlement failed") : isPending ? "Crediting recipient's account…" : `${tx.rail} confirmed credit` },
   ];
 
@@ -85,7 +85,7 @@ function Track() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <h1 className="text-sm font-bold">Transfer tracker</h1>
-          <button onClick={() => navigator.share?.({ title: "TUMA Transfer", text: `Ref: ${tx.reference}` })}
+          <button onClick={() => navigator.share?.({ title: "Autopayke Transfer", text: `Ref: ${tx.reference}` })}
             className="h-9 w-9 rounded-full border border-border bg-card flex items-center justify-center">
             <Share2 className="h-4 w-4" />
           </button>
@@ -148,7 +148,7 @@ function Track() {
         </div>
 
         <div className="px-5 mt-5 pb-8">
-          <button onClick={() => navigator.share?.({ title: "TUMA Receipt", text: `Transfer ref ${tx.reference} — ${tx.status}` })}
+          <button onClick={() => navigator.share?.({ title: "Autopayke Receipt", text: `Transfer ref ${tx.reference} — ${tx.status}` })}
             className="w-full rounded-2xl py-3.5 text-sm font-semibold text-primary-foreground shadow-(--shadow-elegant)"
             style={{ background: "var(--gradient-portfolio)" }}>
             Share receipt
