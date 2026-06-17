@@ -6,6 +6,7 @@ import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { getWalletBalances, explorerUrl } from "../services/avalanche";
+import { backfillCryptoDeposits } from "../services/deposit-scan";
 import { NotFoundError } from "../lib/errors";
 import type { Address } from "viem";
 
@@ -33,6 +34,7 @@ walletRouter.get("/", async (c) => {
   }
 
   const walletAddress = user.walletAddress as Address;
+  await backfillCryptoDeposits(userId, walletAddress);
   const assets = await getWalletBalances(walletAddress);
   const totalUsd = assets.reduce((sum, a) => sum + a.balanceUsd, 0);
 
