@@ -1,0 +1,14 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Orange rounded square background -->
+  <rect width="200" height="200" rx="40" fill="#FF6B00"/>
+
+  <!-- Solid geometric A -->
+  <!-- Left leg -->
+  <polygon points="28,168 72,32 88,32 44,168" fill="#0D0D0D"/>
+  <!-- Right leg -->
+  <polygon points="172,168 128,32 112,32 156,168" fill="#0D0D0D"/>
+  <!-- Top apex -->
+  <polygon points="100,22 72,32 128,32" fill="#0D0D0D"/>
+  <!-- Crossbar -->
+  <rect x="62" y="108" width="76" height="18" rx="3" fill="#0D0D0D"/>
+</svg>
