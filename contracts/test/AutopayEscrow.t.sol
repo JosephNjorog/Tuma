@@ -35,7 +35,9 @@ contract AutopayEscrowTest is Test {
 
     function setUp() public {
         usdc = new MockUSDC();
-        escrow = new AutopayEscrow(admin, relayer, signer);
+        address[] memory initialTokens = new address[](1);
+        initialTokens[0] = address(usdc);
+        escrow = new AutopayEscrow(admin, relayer, signer, initialTokens);
 
         // Fund sender and approve escrow
         usdc.mint(sender, AMOUNT * 10);
@@ -232,5 +234,41 @@ contract AutopayEscrowTest is Test {
 
         vm.warp(block.timestamp + EXPIRY + 1);
         assertTrue(escrow.isRefundable(CLAIM_REF));
+    }
+
+    // ── Token allowlist ───────────────────────────────────────────────────────
+
+    function test_deposit_revertsForDisallowedToken() public {
+        MockUSDC randomToken = new MockUSDC();
+        randomToken.mint(sender, AMOUNT);
+        vm.prank(sender);
+        randomToken.approve(address(escrow), type(uint256).max);
+
+        vm.prank(sender);
+        vm.expectRevert(
+            abi.encodeWithSelector(AutopayEscrow.TokenNotAllowed.selector, address(randomToken))
+        );
+        escrow.deposit(CLAIM_REF, address(randomToken), AMOUNT, EXPIRY);
+    }
+
+    function test_setTokenAllowed_adminCanAllowNewToken() public {
+        MockUSDC randomToken = new MockUSDC();
+        randomToken.mint(sender, AMOUNT);
+        vm.prank(sender);
+        randomToken.approve(address(escrow), type(uint256).max);
+
+        vm.prank(admin);
+        escrow.setTokenAllowed(address(randomToken), true);
+
+        vm.prank(sender);
+        escrow.deposit(CLAIM_REF, address(randomToken), AMOUNT, EXPIRY);
+        (, address token,,,) = escrow.getPayment(CLAIM_REF);
+        assertEq(token, address(randomToken));
+    }
+
+    function test_setTokenAllowed_revertsForStranger() public {
+        vm.prank(attacker);
+        vm.expectRevert();
+        escrow.setTokenAllowed(address(usdc), false);
     }
 }
