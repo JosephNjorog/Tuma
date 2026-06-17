@@ -119,10 +119,10 @@ export type WalletData = {
 
 export const api = {
   auth: {
-    sendOtp: (phone: string) =>
-      request<{ message: string; expiresIn: number }>("/api/auth/send-otp", {
+    sendOtp: (phone: string, email?: string) =>
+      request<{ message: string; expiresIn: number; channel: "email" | "sms" }>("/api/auth/send-otp", {
         method: "POST",
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, email }),
       }),
 
     verifyOtp: (phone: string, code: string) =>
