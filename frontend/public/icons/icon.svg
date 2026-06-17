@@ -1,11 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7c3aed"/>
-      <stop offset="50%" stop-color="#5b21b6"/>
-      <stop offset="100%" stop-color="#4c1d95"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
-  <text x="256" y="358" font-family="system-ui,-apple-system,Helvetica,Arial,sans-serif" font-weight="900" font-size="260" fill="white" text-anchor="middle" letter-spacing="-4">A</text>
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Orange rounded square background -->
+  <rect width="200" height="200" rx="40" fill="#FF6B00"/>
+
+  <!-- Solid geometric A -->
+  <!-- Left leg -->
+  <polygon points="28,168 72,32 88,32 44,168" fill="#0D0D0D"/>
+  <!-- Right leg -->
+  <polygon points="172,168 128,32 112,32 156,168" fill="#0D0D0D"/>
+  <!-- Top apex -->
+  <polygon points="100,22 72,32 128,32" fill="#0D0D0D"/>
+  <!-- Crossbar -->
+  <rect x="62" y="108" width="76" height="18" rx="3" fill="#0D0D0D"/>
 </svg>
