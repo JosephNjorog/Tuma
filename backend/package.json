@@ -10,6 +10,7 @@
     "worker:escrow": "bun run src/workers/escrow.worker.ts",
     "worker:rail": "bun run src/workers/rail.worker.ts",
     "worker:notify": "bun run src/workers/notify.worker.ts",
+    "worker:all": "bun run src/workers/all.worker.ts",
     "db:push": "drizzle-kit push --force",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
