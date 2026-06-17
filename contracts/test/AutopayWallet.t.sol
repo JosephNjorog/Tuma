@@ -188,19 +188,169 @@ contract AutopaySmartWalletTest is Test {
 
     // ── updateGuardian ────────────────────────────────────────────────────────
 
-    function test_updateGuardian_byGuardian() public {
+    function test_updateGuardian_proposesButDoesNotApplyImmediately() public {
         address newGuardian = makeAddr("newGuardian");
 
         vm.prank(guardian);
         wallet.updateGuardian(newGuardian);
 
-        assertEq(wallet.guardian(), newGuardian);
+        // Still the old guardian until the timelock elapses and finalize is called.
+        assertEq(wallet.guardian(), guardian);
+        assertEq(wallet.pendingGuardian(), newGuardian);
     }
 
     function test_updateGuardian_revertsForOwner() public {
         vm.prank(owner);
         vm.expectRevert(AutopaySmartWallet.NotAuthorized.selector);
         wallet.updateGuardian(alice);
+    }
+
+    function test_finalizeGuardianChange_revertsBeforeDelay() public {
+        address newGuardian = makeAddr("newGuardian");
+        vm.prank(guardian);
+        wallet.updateGuardian(newGuardian);
+
+        vm.expectRevert();
+        wallet.finalizeGuardianChange();
+    }
+
+    function test_finalizeGuardianChange_succeedsAfterDelay() public {
+        address newGuardian = makeAddr("newGuardian");
+        vm.prank(guardian);
+        wallet.updateGuardian(newGuardian);
+
+        vm.warp(block.timestamp + wallet.GUARDIAN_CHANGE_DELAY() + 1);
+        wallet.finalizeGuardianChange();
+
+        assertEq(wallet.guardian(), newGuardian);
+        assertEq(wallet.pendingGuardian(), address(0));
+    }
+
+    function test_cancelGuardianChange_byOwner() public {
+        address newGuardian = makeAddr("newGuardian");
+        vm.prank(guardian);
+        wallet.updateGuardian(newGuardian);
+
+        vm.prank(owner);
+        wallet.cancelGuardianChange();
+
+        assertEq(wallet.pendingGuardian(), address(0));
+
+        vm.warp(block.timestamp + wallet.GUARDIAN_CHANGE_DELAY() + 1);
+        vm.expectRevert();
+        wallet.finalizeGuardianChange();
+
+        assertEq(wallet.guardian(), guardian);
+    }
+
+    function test_cancelGuardianChange_revertsForGuardian() public {
+        address newGuardian = makeAddr("newGuardian");
+        vm.prank(guardian);
+        wallet.updateGuardian(newGuardian);
+
+        vm.prank(guardian);
+        vm.expectRevert(AutopaySmartWallet.NotAuthorized.selector);
+        wallet.cancelGuardianChange();
+    }
+
+    // ── Pausable ──────────────────────────────────────────────────────────────
+
+    function test_pause_byGuardian_blocksExecute() public {
+        vm.prank(guardian);
+        wallet.pause();
+
+        vm.prank(guardian);
+        vm.expectRevert();
+        wallet.execute(alice, 0, "");
+    }
+
+    function test_unpause_revertsForGuardian() public {
+        vm.prank(guardian);
+        wallet.pause();
+
+        vm.prank(guardian);
+        vm.expectRevert(AutopaySmartWallet.NotAuthorized.selector);
+        wallet.unpause();
+    }
+
+    function test_unpause_byOwner() public {
+        vm.prank(guardian);
+        wallet.pause();
+
+        vm.prank(owner);
+        wallet.unpause();
+
+        vm.prank(guardian);
+        wallet.execute(alice, 0, "");
+    }
+
+    // ── Guardian daily spend cap ─────────────────────────────────────────────
+
+    function test_guardianDailyLimit_blocksTransferOverCap() public {
+        vm.prank(owner);
+        wallet.setGuardianDailyLimit(address(token), 100e18);
+
+        bytes memory transferData = abi.encodeWithSignature(
+            "transfer(address,uint256)",
+            alice,
+            150e18
+        );
+
+        vm.prank(guardian);
+        vm.expectRevert();
+        wallet.execute(address(token), 0, transferData);
+    }
+
+    function test_guardianDailyLimit_allowsTransferUnderCap() public {
+        vm.prank(owner);
+        wallet.setGuardianDailyLimit(address(token), 100e18);
+
+        bytes memory transferData = abi.encodeWithSignature(
+            "transfer(address,uint256)",
+            alice,
+            50e18
+        );
+
+        vm.prank(guardian);
+        wallet.execute(address(token), 0, transferData);
+
+        assertEq(token.balanceOf(alice), 50e18);
+    }
+
+    function test_guardianDailyLimit_doesNotApplyToOwner() public {
+        vm.prank(owner);
+        wallet.setGuardianDailyLimit(address(token), 1);
+
+        bytes memory transferData = abi.encodeWithSignature(
+            "transfer(address,uint256)",
+            alice,
+            500e18
+        );
+
+        // Owner isn't capped, even though guardian's cap is set very low.
+        vm.prank(owner);
+        wallet.execute(address(token), 0, transferData);
+
+        assertEq(token.balanceOf(alice), 500e18);
+    }
+
+    function test_guardianCannotRaiseOwnLimit() public {
+        vm.prank(owner);
+        wallet.setGuardianDailyLimit(address(token), 100e18);
+
+        vm.prank(guardian);
+        vm.expectRevert(AutopaySmartWallet.NotAuthorized.selector);
+        wallet.setGuardianDailyLimit(address(token), 200e18);
+    }
+
+    function test_guardianCanLowerOwnLimit() public {
+        vm.prank(owner);
+        wallet.setGuardianDailyLimit(address(token), 100e18);
+
+        vm.prank(guardian);
+        wallet.setGuardianDailyLimit(address(token), 50e18);
+
+        assertEq(wallet.guardianDailyTokenLimit(address(token)), 50e18);
     }
 
     // ── Receive AVAX ─────────────────────────────────────────────────────────
