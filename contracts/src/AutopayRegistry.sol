@@ -88,6 +88,22 @@ contract AutopayRegistry is AccessControl {
         emit WalletUpdated(phoneHash, oldWallet, newWallet);
     }
 
+    /**
+     * @notice Deactivate a wallet's registration (e.g., account closed, compromised
+     *         wallet replaced and the old address should no longer resolve).
+     * @dev Clears both directions of the mapping so getWallet/getPhoneHash/
+     *      isRegistered all reflect the deactivation immediately.
+     */
+    function deactivateWallet(bytes32 phoneHash) external onlyRole(RELAYER_ROLE) {
+        address wallet = _wallets[phoneHash];
+        if (wallet == address(0)) revert NotRegistered(phoneHash);
+
+        delete _wallets[phoneHash];
+        delete _phoneHashes[wallet];
+
+        emit WalletDeactivated(phoneHash, wallet);
+    }
+
     // ── Read ──────────────────────────────────────────────────────────────────
 
     /**
@@ -110,6 +126,15 @@ contract AutopayRegistry is AccessControl {
      */
     function isRegistered(bytes32 phoneHash) external view returns (bool) {
         return _wallets[phoneHash] != address(0);
+    }
+
+    /**
+     * @notice Check if a wallet address currently has an active registration.
+     *         Used by AutopayPaymaster to validate sponsorship requests
+     *         instead of trusting the relayer's input blindly.
+     */
+    function isWalletRegistered(address wallet) external view returns (bool) {
+        return _phoneHashes[wallet] != bytes32(0);
     }
 
     /**
