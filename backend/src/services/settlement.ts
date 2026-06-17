@@ -21,6 +21,10 @@ const STEP_META: Record<TransactionStatus, { label: string; description: string 
     label: "Settled",
     description: "Credited to recipient's mobile money or bank",
   },
+  requires_review: {
+    label: "Needs review",
+    description: "The outcome is unclear and needs operator review",
+  },
   failed: {
     label: "Failed",
     description: "Transaction could not be completed",
@@ -43,6 +47,15 @@ export async function recordSettlementStep(
   step: TransactionStatus,
   metadata?: Record<string, unknown>
 ): Promise<void> {
+  const needsAttention = step === "failed" || step === "requires_review";
+  const failureStage = typeof metadata?.stage === "string" ? metadata.stage : undefined;
+  const failureReason =
+    typeof metadata?.reason === "string"
+      ? metadata.reason
+      : typeof metadata?.error === "string"
+        ? metadata.error
+        : undefined;
+
   await Promise.all([
     db.insert(settlementEvents).values({
       transactionId,
@@ -54,6 +67,13 @@ export async function recordSettlementStep(
       .set({
         status: step,
         updatedAt: new Date(),
+        ...(needsAttention
+          ? {
+              failureStage: failureStage ?? null,
+              failureReason: failureReason ?? null,
+              failedAt: new Date(),
+            }
+          : {}),
         ...(step === "settled" ? { settledAt: new Date() } : {}),
       })
       .where(eq(transactions.id, transactionId)),
