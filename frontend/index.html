@@ -71,6 +71,22 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Capture beforeinstallprompt as early as possible — Chrome can fire it
+         before any framework code runs, and a listener added inside a
+         lazily-loaded route component (after React mounts) can miss it
+         entirely, permanently losing the native install prompt for that
+         page load. -->
+    <script>
+      window.__pwaInstallPrompt = null;
+      window.addEventListener("beforeinstallprompt", function (e) {
+        e.preventDefault();
+        window.__pwaInstallPrompt = e;
+        window.dispatchEvent(new CustomEvent("pwa-install-available"));
+      });
+      window.addEventListener("appinstalled", function () {
+        window.__pwaInstallPrompt = null;
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
