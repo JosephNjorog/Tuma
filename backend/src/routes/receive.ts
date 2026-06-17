@@ -27,9 +27,9 @@ receiveRouter.get("/", async (c) => {
       phone: user.phone,
       walletAddress: user.walletAddress,
       qrPayload,
-      // Deep link that opens TUMA and pre-fills the recipient
+      // Deep link that opens Autopayke and pre-fills the recipient
       deepLink: `${process.env.APP_URL}/send?to=${encodeURIComponent(user.phone)}`,
-      shareText: `Send me money on TUMA: ${process.env.APP_URL}/send?to=${encodeURIComponent(user.phone)}`,
+      shareText: `Send me money on Autopayke: ${process.env.APP_URL}/send?to=${encodeURIComponent(user.phone)}`,
     },
   });
 });
