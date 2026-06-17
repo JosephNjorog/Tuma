@@ -53,7 +53,7 @@ export async function sendWavePayout(
       currency: "XOF",
       receive_amount: Math.round(amount).toString(),
       mobile: phone,
-      name: "TUMA recipient",
+      name: "Autopayke recipient",
       client_reference: ref,
       business_id: WAVE_BUSINESS_ID,
     }),
