@@ -142,9 +142,7 @@ function Index() {
       {/* Nav */}
       <nav className="flex items-center justify-between px-6 py-5 max-w-2xl mx-auto w-full">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-xl flex items-center justify-center font-black text-sm bg-linear-to-br from-violet-500 to-purple-700">
-            A
-          </div>
+          <img src="/autopay_iconlogo.svg" alt="Autopayke" className="h-8 w-8 rounded-xl" />
           <span className="font-black tracking-tight text-base">Autopayke</span>
         </div>
         <div className="flex items-center gap-2">
@@ -244,7 +242,7 @@ function Index() {
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
           <div className="pointer-events-auto w-full max-w-sm mx-4 mb-4 rounded-2xl border border-white/10 bg-[#18182a]/95 backdrop-blur-xl p-4 shadow-2xl flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-white bg-linear-to-br from-violet-500 to-purple-700 text-lg">A</div>
+            <img src="/autopay_iconlogo.svg" alt="Autopayke" className="h-12 w-12 rounded-xl shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-white">Add Autopayke to Home Screen</p>
               <p className="text-xs text-white/50">Use it like a native app — instant access</p>
