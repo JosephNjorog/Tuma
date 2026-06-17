@@ -467,7 +467,7 @@ flowchart TD
 
   expiry["Escrow reaches expiresAt\nescrow.worker refund"]
   expired["Record status: expired\nsender refunded"]
-  scanner["Planned expiry scanner\nfor missed delayed jobs"]
+  scanner["Expiry scanner\nrepairs missed delayed jobs"]
 
   start --> idem
   idem -->|yes| replay
@@ -494,8 +494,8 @@ flowchart TD
   claimRecorded --> railQueue
   escrowOnchain -->|not claimed by expiry| expiry
   expiry -->|refund confirmed| expired
-  expiry -.->|refund retry exhausted next hardening| review
-  scanner -.-> expiry
+  expiry -->|refund retry exhausted| review
+  scanner -->|finds expired pending escrow| expiry
 
   railQueue -->|queue add fails| review
   railQueue -->|queued| railWorker
@@ -515,7 +515,7 @@ flowchart TD
   classDef planned fill:#f8fafc,stroke:#64748b,stroke-dasharray: 5 5,color:#0f172a;
 
   class replay,directOnchain,escrowOnchain,claimLink,claimRecorded,routed,settled,expired success;
-  class start,lock,validate,tx,recipient,directChain,escrowDeposit,recipientClaim,railQueue,railWorker,settleWait pending;
+  class start,lock,validate,tx,recipient,directChain,escrowDeposit,recipientClaim,railQueue,railWorker,settleWait,scanner pending;
   class retry,review warning;
   class requestFail,failed failure;
   class scanner planned;
@@ -533,6 +533,7 @@ Implemented guardrails:
 - Transactions record `requires_review`, `failureStage`, `failureReason`, and `failedAt` when the outcome is unclear after money movement.
 - Rail payouts for direct sends and escrow claims go through the `rail_disburse` queue, with inline fallback only when Redis queues are disabled for local/demo runs.
 - Escrow claim-link notifications use the notification queue and can move a transaction to `requires_review` after final delivery failure.
+- Escrow expiry uses deterministic delayed jobs plus a periodic scanner in `escrow.worker`, so expired pending escrows are re-enqueued or refunded even if the original delayed job was missed.
 - History and tracking APIs expose review metadata so the frontend can stop polling and show "Needs review" rather than spinning forever.
 
 Design decisions and tradeoffs are documented in [docs/adr/](docs/adr/). The current send/escrow failure matrix is in [docs/send-escrow-failure-scenarios.md](docs/send-escrow-failure-scenarios.md).

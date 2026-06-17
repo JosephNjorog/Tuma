@@ -41,7 +41,7 @@ This matrix tracks the current resilience posture for the send and escrow flows.
 | Escrow approval | Approval fails before deposit | Transaction is marked `requires_review`. | Partial | In many cases no funds moved, but the status is conservative. | Split definite pre-money failures from unknown post-broadcast failures. |
 | Escrow deposit | Deposit fails before broadcast | Transaction is marked `requires_review`. | Partial | Same ambiguity as other chain calls. | Classify RPC failures and add chain reconciliation. |
 | Escrow deposit | Deposit succeeds but DB update or escrow row insert fails | Transaction is marked `requires_review` if the catch path runs. | Partial | The on-chain escrow may exist without a complete local escrow row. | Reconcile escrow deposits from chain events. |
-| Expiry scheduling | Redis queue disabled or schedule call returns false | Send continues; no durable expiry job is guaranteed. | Gap | Funds can remain escrowed past expiry without a scanner/worker recovery path. | Add an expiry scanner/reconciler. |
+| Expiry scheduling | Redis queue disabled, schedule call returns false, or delayed job is lost | Escrow worker scans expired pending escrows and either re-enqueues a deterministic expiry job or processes inline when the queue is unavailable. | Implemented | Recovery depends on the escrow worker running and being able to reach the database. | Add scanner heartbeat/alerting. |
 | Claim-link notification | Queue/send fails after funds escrowed | Transaction is marked `requires_review`; funds remain escrowed. | Implemented | Operator must resend the link or contact recipient. | Add operator resend action and alerting. |
 | Claim-link notification | Queue accepts job but final delivery fails | Notify worker marks transaction `requires_review` after final retry. | Implemented | Requires operator follow-up. | Add notification failure dashboard. |
 
@@ -61,10 +61,10 @@ This matrix tracks the current resilience posture for the send and escrow flows.
 
 | Stage | Failure scenario | Current handling | Status | Tradeoff / residual risk | Next hardening |
 | --- | --- | --- | --- | --- | --- |
-| Expiry worker | Delayed job fires before expiry | Worker checks `expiresAt` and skips if too early. | Implemented | Early skipped jobs may not automatically reschedule. | Reschedule when skipped early. |
+| Expiry worker | Delayed job fires before expiry | Worker checks `expiresAt` and skips if too early; the scanner catches still-pending escrows after `expiresAt`. | Implemented | Early jobs rely on the scanner for later repair. | Add a metric for early skips. |
 | Expiry worker | Escrow already claimed/refunded | Worker skips non-pending escrow. | Implemented | None significant. | Add idempotency tests. |
-| Expiry worker | Refund transaction fails | Worker throws for BullMQ retry. | Partial | Final retry currently logs failure but does not mark `requires_review`. | Mark final refund failure as `requires_review`. |
-| Missed expiry | Queue job was never scheduled, Redis lost data, or worker was down long-term | No periodic scanner yet. | Gap | Expired escrows can remain pending. | Build scanner for `pending` escrows with `expiresAt < now`. |
+| Expiry worker | Refund transaction fails | Worker retries with BullMQ backoff and marks `requires_review` after final retry failure. | Implemented | Operator still needs a retry/refund decision workflow. | Add operator retry action. |
+| Missed expiry | Queue job was never scheduled, Redis lost data, or worker was down long-term | Periodic scanner finds `pending` escrows with `expiresAt < now` and repairs by enqueuing or inline processing. | Implemented | Scanner must be running; deterministic job ids avoid duplicate queue buildup but do not replace monitoring. | Add scanner heartbeat/alerting. |
 
 ## Webhooks And Settlement
 
@@ -77,8 +77,8 @@ This matrix tracks the current resilience posture for the send and escrow flows.
 
 ## Current Priority Order
 
-1. Add escrow expiry scanner/reconciler.
-2. Add claim post-on-chain reconciliation and claim idempotency lock.
-3. Add provider-level rail idempotency keys and dead-letter visibility.
-4. Add operator tools for `requires_review`: resend claim link, retry rail payout, reconcile chain hash, refund escrow.
-5. Add integration tests around duplicate sends, queue failure, final retry review, and escrow claim failure paths.
+1. Add claim post-on-chain reconciliation and claim idempotency lock.
+2. Add provider-level rail idempotency keys and dead-letter visibility.
+3. Add operator tools for `requires_review`: resend claim link, retry rail payout, reconcile chain hash, refund escrow.
+4. Add scanner/worker heartbeat alerting.
+5. Add integration tests around duplicate sends, queue failure, final retry review, expiry scanner repair, and escrow claim failure paths.

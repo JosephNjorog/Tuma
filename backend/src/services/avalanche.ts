@@ -37,16 +37,23 @@ export const publicClient = createPublicClient({
 // Relayer client — lazily initialized so a missing key doesn't crash startup.
 // Blockchain write operations will throw BlockchainError if key is not set.
 let _relayerClient: ReturnType<typeof createWalletClient> | null = null;
+let _relayerAccount: ReturnType<typeof privateKeyToAccount> | null = null;
 
-function requireRelayer() {
-  if (_relayerClient) return _relayerClient;
+function requireRelayerAccount() {
+  if (_relayerAccount) return _relayerAccount;
   const key = process.env.RELAYER_PRIVATE_KEY;
   if (!key || !/^0x[0-9a-fA-F]{64}$/.test(key)) {
     throw new BlockchainError(
       "RELAYER_PRIVATE_KEY is not configured — blockchain write operations are disabled"
     );
   }
-  const account = privateKeyToAccount(key as `0x${string}`);
+  _relayerAccount = privateKeyToAccount(key as `0x${string}`);
+  return _relayerAccount;
+}
+
+function requireRelayer() {
+  if (_relayerClient) return _relayerClient;
+  const account = requireRelayerAccount();
   _relayerClient = createWalletClient({ account, chain, transport: http(rpcUrl) });
   return _relayerClient;
 }
@@ -268,6 +275,8 @@ export async function deploySmartWallet(phoneHash: string): Promise<Address> {
   const userAccount = getUserAccount(phoneHash);
 
   const hash = await requireRelayer().writeContract({
+    chain,
+    account: requireRelayerAccount(),
     address: factoryAddress,
     abi: TUMA_FACTORY_ABI,
     functionName: "createWallet",
@@ -476,6 +485,8 @@ export async function transferUsdc(
   });
 
   const hash = await requireRelayer().writeContract({
+    chain,
+    account: requireRelayerAccount(),
     address: fromWalletAddress,
     abi: SMART_WALLET_ABI,
     functionName: "execute",
@@ -501,6 +512,8 @@ export async function approveEscrow(
   });
 
   const hash = await requireRelayer().writeContract({
+    chain,
+    account: requireRelayerAccount(),
     address: fromWalletAddress,
     abi: SMART_WALLET_ABI,
     functionName: "execute",
@@ -525,6 +538,8 @@ export async function registerWalletOnChain(
   if (!registryAddress || registryAddress === "0x") return;
 
   const hash = await requireRelayer().writeContract({
+    chain,
+    account: requireRelayerAccount(),
     address: registryAddress,
     abi: TUMA_REGISTRY_ABI,
     functionName: "registerWallet",
@@ -562,6 +577,8 @@ export async function depositToEscrow(
   });
 
   const hash = await requireRelayer().writeContract({
+    chain,
+    account: requireRelayerAccount(),
     address: senderWalletAddress,
     abi: SMART_WALLET_ABI,
     functionName: "execute",
@@ -589,10 +606,35 @@ export async function claimEscrowOnChain(
   const claimRefBytes32 = stringToBytes32(escrowRef);
 
   const hash = await requireRelayer().writeContract({
+    chain,
+    account: requireRelayerAccount(),
     address: escrowAddress,
     abi: TUMA_ESCROW_ABI,
     functionName: "claim",
     args: [claimRefBytes32, recipientAddress, signature],
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+/**
+ * Refunds an expired pending escrow back to the original sender.
+ * TumaEscrow enforces the expiry and pending-state checks on-chain.
+ */
+export async function refundEscrowOnChain(escrowRef: string): Promise<Hash> {
+  const escrowAddress = process.env.TUMA_ESCROW_ADDRESS as Address;
+  if (!escrowAddress || escrowAddress === "0x") {
+    throw new BlockchainError("TUMA_ESCROW_ADDRESS is not configured");
+  }
+
+  const hash = await requireRelayer().writeContract({
+    chain,
+    account: requireRelayerAccount(),
+    address: escrowAddress,
+    abi: TUMA_ESCROW_ABI,
+    functionName: "refund",
+    args: [stringToBytes32(escrowRef)],
   });
 
   await publicClient.waitForTransactionReceipt({ hash });
@@ -611,6 +653,8 @@ export async function creditFromFloat(
   const amountRaw = parseUnits(amountUsd.toFixed(6), 6);
 
   const hash = await requireRelayer().writeContract({
+    chain,
+    account: requireRelayerAccount(),
     address: TOKEN_ADDRESSES.USDC,
     abi: ERC20_ABI,
     functionName: "transfer",
@@ -641,6 +685,8 @@ export async function sponsorWallet(walletAddress: Address): Promise<void> {
   ] as const;
 
   const hash = await requireRelayer().writeContract({
+    chain,
+    account: requireRelayerAccount(),
     address: paymasterAddress,
     abi: PAYMASTER_APPROVE_ABI,
     functionName: "approveWallet",

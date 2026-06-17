@@ -96,7 +96,13 @@ export async function scheduleEscrowExpiry(
 ): Promise<boolean> {
   if (!escrowQueue) return false;
   const delay = expiresAt.getTime() - Date.now();
-  await escrowQueue.add("expire", job, { delay: Math.max(delay, 0) });
+  await escrowQueue.add("expire", job, {
+    jobId: `escrow-expire:${job.escrowRef}`,
+    delay: Math.max(delay, 0),
+    attempts: 5,
+    backoff: { type: "exponential", delay: 60_000 },
+    removeOnComplete: true,
+  });
   return true;
 }
 
