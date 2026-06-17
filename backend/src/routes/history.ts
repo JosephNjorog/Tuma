@@ -2,10 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "../db";
-import { transactions } from "../db/schema";
+import { transactions, users } from "../db/schema";
 import { and, eq, or, desc, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { backfillCryptoDeposits } from "../services/deposit-scan";
 import type { TransactionSummary } from "@tuma/shared";
+import type { Address } from "viem";
 
 export const historyRouter = new Hono();
 historyRouter.use("*", authMiddleware);
@@ -20,6 +22,11 @@ const QuerySchema = z.object({
 historyRouter.get("/", zValidator("query", QuerySchema), async (c) => {
   const { filter, page, limit } = c.req.valid("query");
   const { sub: userId } = c.get("user");
+
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (user?.walletAddress) {
+    await backfillCryptoDeposits(userId, user.walletAddress as Address);
+  }
 
   const offset = (page - 1) * limit;
 
