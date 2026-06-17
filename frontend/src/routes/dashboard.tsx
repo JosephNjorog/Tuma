@@ -1,11 +1,25 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, Copy, Send, QrCode, Plus, Store, ArrowUpRight, ArrowDownLeft, Bell, Check, Loader2, LogOut, Inbox, BadgeCheck, XCircle } from "lucide-react";
+import { Eye, EyeOff, Copy, Send, QrCode, Plus, Store, ArrowUpRight, ArrowDownLeft, Bell, Check, Loader2, LogOut, Inbox, BadgeCheck, XCircle, Sun, Moon } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MobileFrame } from "@/components/MobileFrame";
 import { BottomNav } from "@/components/BottomNav";
 import { api, type WalletAsset, type TxSummary, type Notification } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth-store";
+import { useThemeStore } from "@/lib/theme-store";
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useThemeStore();
+  return (
+    <button
+      onClick={toggleTheme}
+      aria-label="Toggle dark mode"
+      className="h-9 w-9 rounded-full border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground transition"
+    >
+      {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
+  );
+}
 
 function fmtNotifTime(iso: string) {
   const d = new Date(iso);
@@ -182,6 +196,7 @@ function Dashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <NotificationBell accessToken={accessToken} />
             <button
               onClick={handleLogout}
