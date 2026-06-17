@@ -25,6 +25,8 @@ import "../src/interfaces/IEntryPoint.sol";
  *   ADMIN_ADDRESS          Admin address (multisig in production)
  *   RELAYER_ADDRESS        Autopayke backend relayer EOA
  *   SIGNER_ADDRESS         Autopayke backend signer EOA (for escrow claim signatures)
+ *   USDC_ADDRESS           USDC contract on the target network — allowed in AutopayEscrow from deploy
+ *   USDT_ADDRESS           Optional — leave unset on networks with no canonical USDT (e.g. Fuji)
  *
  * The canonical ERC-4337 EntryPoint v0.6:
  *   0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
@@ -45,6 +47,8 @@ contract Deploy is Script {
         address admin = vm.envAddress("ADMIN_ADDRESS");
         address relayer = vm.envAddress("RELAYER_ADDRESS");
         address signer = vm.envAddress("SIGNER_ADDRESS");
+        address usdc = vm.envAddress("USDC_ADDRESS");
+        address usdt = vm.envOr("USDT_ADDRESS", address(0));
 
         address deployer = vm.addr(deployerKey);
 
@@ -72,12 +76,16 @@ contract Deploy is Script {
         console.log("AutopayWalletFactory: ", address(deployed.factory));
 
         // 3. AutopayEscrow
-        deployed.escrow = new AutopayEscrow(admin, relayer, signer);
+        address[] memory allowedTokens = new address[](usdt == address(0) ? 1 : 2);
+        allowedTokens[0] = usdc;
+        if (usdt != address(0)) allowedTokens[1] = usdt;
+        deployed.escrow = new AutopayEscrow(admin, relayer, signer, allowedTokens);
         console.log("AutopayEscrow:        ", address(deployed.escrow));
 
         // 4. AutopayPaymaster
         deployed.paymaster = new AutopayPaymaster(
             IEntryPoint(ENTRY_POINT),
+            deployed.registry,
             admin,
             relayer
         );
@@ -98,8 +106,11 @@ contract Deploy is Script {
         console.log("=== Post-deploy checklist ===");
         console.log("[ ] Fund AutopayPaymaster deposit: paymaster.deposit{value: 2 ether}()");
         console.log("[ ] Add paymaster stake: paymaster.addStake{value: 1 ether}(86400)");
+        console.log("[ ] Set a daily sponsorship cap: paymaster.setDailySponsorshipLimit(...)");
+        console.log("[ ] Set guardian daily spend limits per token on deployed wallets once real balances exist");
         console.log("[ ] Verify contracts on Snowtrace");
         console.log("[ ] Update ADMIN_ADDRESS to multisig after testing");
+        console.log("[ ] Move RELAYER_PRIVATE_KEY to a KMS/HSM before mainnet - see audit notes");
 
         return deployed;
     }
