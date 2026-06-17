@@ -60,7 +60,7 @@ historyRouter.get("/", zValidator("query", QuerySchema), async (c) => {
     reference: tx.reference,
     direction: tx.recipientUserId === userId ? "in" : "out",
     counterparty:
-      tx.senderId === userId ? tx.recipientPhone : (tx.senderId ?? "TUMA"),
+      tx.senderId === userId ? tx.recipientPhone : (tx.senderId ?? "Autopayke"),
     amountUsd: parseFloat(tx.amountUsdc),
     amountLocal: parseFloat(tx.amountLocal),
     localCurrency: tx.localCurrency,
