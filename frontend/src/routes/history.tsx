@@ -24,6 +24,7 @@ function fmtDate(iso: string) {
 
 function statusBadge(status: TxSummary["status"]) {
   if (status === "initiated" || status === "onchain" || status === "routed") return "Pending";
+  if (status === "requires_review") return "Needs review";
   if (status === "failed") return "Failed";
   if (status === "expired") return "Expired";
   return null;
@@ -113,7 +114,7 @@ function History() {
                       {fxLine && <span className="text-muted-foreground">{fxLine}</span>}
                       {badge && (
                         <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${
-                          tx.status === "failed" || tx.status === "expired"
+                          tx.status === "failed" || tx.status === "expired" || tx.status === "requires_review"
                             ? "text-destructive bg-destructive/10"
                             : "text-warning bg-warning-soft"
                         }`}>

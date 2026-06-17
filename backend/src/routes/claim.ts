@@ -5,14 +5,18 @@ import { db } from "../db";
 import { escrowPayments, transactions, users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
-import { ClaimPaymentSchema } from "@tuma/shared";
-import { disburseToRail } from "../services/rails";
 import { recordSettlementStep } from "../services/settlement";
+import { processRailDisbursement } from "../services/rail-disbursement";
 import { claimEscrowOnChain } from "../services/avalanche";
 import { signEscrowClaim } from "../lib/escrow-signer";
+import { enqueueRailDisburse, type RailDisburseJob } from "../lib/queue";
 import { EscrowError, NotFoundError } from "../lib/errors";
 
 export const claimRouter = new Hono();
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 // GET /api/claim/:ref  ─── Preview claim (no auth required so non-users can see it)
 claimRouter.get("/:ref", async (c) => {
@@ -88,38 +92,83 @@ claimRouter.post(
       .update(escrowPayments)
       .set({
         status: "claimed",
+        claimTxHash,
         claimedByWallet: recipient.walletAddress,
         claimedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(escrowPayments.ref, ref));
 
-    // Disburse to recipient's local rail
-    const { railReference, rail } = await disburseToRail({
-      recipientPhone: phone,
-      amountLocal: parseFloat(escrow.transaction.amountLocal),
-      localCurrency: escrow.transaction.localCurrency,
-      reference: escrow.transaction.reference,
-    });
-
-    // Update transaction
+    // Attach the claiming user and record the on-chain claim before rail payout.
     await db
       .update(transactions)
       .set({
         recipientUserId: userId,
         recipientWalletAddress: recipient.walletAddress,
-        railReference,
-        status: "routed",
         updatedAt: new Date(),
       })
       .where(eq(transactions.id, escrow.transactionId));
 
-    await recordSettlementStep(escrow.transactionId, "routed", {
-      rail,
-      railReference,
+    await recordSettlementStep(escrow.transactionId, "onchain", {
+      escrowRef: ref,
       claimedBy: phone,
       claimTxHash,
     });
+
+    const railJob: RailDisburseJob = {
+      transactionId: escrow.transactionId,
+      rail: escrow.transaction.rail,
+      recipientPhone: phone,
+      amountLocal: parseFloat(escrow.transaction.amountLocal),
+      localCurrency: escrow.transaction.localCurrency,
+      reference: escrow.transaction.reference,
+      failureStage: "claim_rail_disbursement",
+      metadata: {
+        escrowRef: ref,
+        claimedBy: phone,
+        claimTxHash,
+      },
+    };
+
+    let railQueued = false;
+    let railReference: string | null = null;
+    let rail = railJob.rail;
+    let status = "onchain";
+
+    try {
+      railQueued = await enqueueRailDisburse(railJob);
+
+      if (!railQueued) {
+        const result = await processRailDisbursement(railJob);
+        rail = result.rail;
+        railReference = result.railReference;
+        status = result.status === "settled" ? "settled" : "routed";
+      }
+    } catch (err) {
+      await recordSettlementStep(escrow.transactionId, "requires_review", {
+        stage: "claim_rail_disbursement",
+        error: errorMessage(err),
+        escrowRef: ref,
+        claimedBy: phone,
+        claimTxHash,
+      });
+
+      return c.json({
+        ok: true,
+        data: {
+          ref,
+          amountUsdc: parseFloat(escrow.amountUsdc),
+          amountLocal: parseFloat(escrow.transaction.amountLocal),
+          localCurrency: escrow.transaction.localCurrency,
+          rail,
+          railReference,
+          railQueued,
+          status: "requires_review",
+          transactionId: escrow.transactionId,
+          message: "Payment claimed on-chain, but payout needs manual review.",
+        },
+      });
+    }
 
     return c.json({
       ok: true,
@@ -130,8 +179,12 @@ claimRouter.post(
         localCurrency: escrow.transaction.localCurrency,
         rail,
         railReference,
+        railQueued,
+        status,
         transactionId: escrow.transactionId,
-        message: "Payment claimed and on its way to your mobile money account.",
+        message: railQueued
+          ? "Payment claimed and queued for payout."
+          : "Payment claimed and on its way to your mobile money account.",
       },
     });
   }

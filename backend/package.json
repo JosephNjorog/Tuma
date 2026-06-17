@@ -8,6 +8,7 @@
     "start": "bun run src/index.ts",
     "worker:settlement": "bun run src/workers/settlement.worker.ts",
     "worker:escrow": "bun run src/workers/escrow.worker.ts",
+    "worker:rail": "bun run src/workers/rail.worker.ts",
     "worker:notify": "bun run src/workers/notify.worker.ts",
     "db:push": "drizzle-kit push --force",
     "db:migrate": "drizzle-kit migrate",

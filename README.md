@@ -260,6 +260,8 @@ bun db:push
 bun run dev:backend          # API server on http://localhost:3001
 bun run worker:settlement    # Settlement polling worker (separate terminal)
 bun run worker:escrow        # Escrow expiry worker (separate terminal)
+bun run worker:rail          # Rail payout worker (separate terminal)
+bun run worker:notify        # WhatsApp notification worker (separate terminal)
 ```
 
 ### 5. Start the frontend
@@ -379,29 +381,167 @@ Required Meta-approved templates:
 
 ## Architecture
 
-```text
-User (WhatsApp OTP)
-      │
-      ▼
-Hono API (Bun)
-  ├── Auth → Redis (OTP + sessions)
-  ├── FX   → Open Exchange Rates → Redis cache
-  ├── Send → Avalanche (viem) → TumaSmartWallet.execute()
-  │            └── Rail disburse → M-Pesa / MoMo / Paystack / Wave
-  ├── Escrow → TumaEscrow.deposit() → BullMQ (7-day expiry job)
-  └── Webhooks → Settlement events → PostgreSQL
-         │
-         ▼
-BullMQ Workers
-  ├── settlement.worker — polls rail APIs every 10s
-  └── escrow.worker    — fires TumaEscrow.refund() after expiry
+### Component View
 
-PostgreSQL
-  └── users, sessions, transactions, settlement_events, escrow_payments, merchant_settings
+```mermaid
+flowchart LR
+  app["Mobile app / web client"]
+  api["Hono API (Bun)"]
+  db[("PostgreSQL\nusers, transactions, settlement_events, escrow_payments")]
+  redis[("Redis\nOTP, sessions, FX cache, locks")]
+  queues["BullMQ queues\nrail_disburse, whatsapp_notify, settlement_poll, escrow_expire"]
+  chain["Avalanche C-Chain\nTumaWallet, TumaEscrow, Paymaster"]
+  fx["Open Exchange Rates"]
+  whatsapp["Africa's Talking WhatsApp"]
+  rails["Local rails\nM-Pesa, MoMo, Paystack, Wave"]
 
-Avalanche C-Chain
-  └── TumaRegistry, TumaWalletFactory, TumaSmartWallet(s), TumaEscrow, TumaPaymaster
+  railWorker["rail.worker\nretry payouts"]
+  notifyWorker["notify.worker\nretry messages"]
+  settlementWorker["settlement.worker\npoll rail status"]
+  escrowWorker["escrow.worker\nrefund expired escrow"]
+
+  app -->|JWT, idempotency key| api
+  api -->|read/write state| db
+  api -->|OTP, sessions, quote cache, locks| redis
+  api -->|quote rates| fx
+  api -->|smart wallet transfer, escrow deposit, claim| chain
+  api -->|enqueue side effects| queues
+  api -->|local/dev fallback only| rails
+  api -->|local/dev fallback only| whatsapp
+
+  queues --> railWorker
+  queues --> notifyWorker
+  queues --> settlementWorker
+  queues --> escrowWorker
+
+  railWorker -->|submit payout| rails
+  notifyWorker -->|send OTP, claim link, receipt| whatsapp
+  settlementWorker -->|poll pending payout| rails
+  escrowWorker -->|refund unclaimed escrow| chain
+
+  rails -->|webhooks| api
+  api -->|record settled, failed, requires_review| db
+
+  classDef core fill:#eef6ff,stroke:#1d4ed8,color:#0f172a;
+  classDef state fill:#f8fafc,stroke:#64748b,color:#0f172a;
+  classDef external fill:#fff7ed,stroke:#ea580c,color:#0f172a;
+  classDef worker fill:#ecfdf5,stroke:#059669,color:#0f172a;
+
+  class api,app core;
+  class db,redis,queues state;
+  class chain,fx,whatsapp,rails external;
+  class railWorker,notifyWorker,settlementWorker,escrowWorker worker;
 ```
+
+### Send/Escrow Success And Failure Paths
+
+Legend: green is successful state progression, blue is active processing, amber is retry/review, red is terminal failure or no-money-moved request failure, and dashed paths are planned hardening called out in the failure matrix.
+
+```mermaid
+flowchart TD
+  start["POST /api/send"]
+  idem{"Idempotency key seen before?"}
+  replay["Return original transaction\nno new quote or transfer"]
+  lock["Acquire sender-scoped idempotency lock"]
+  validate["Consume quote\nvalidate sender wallet and balance"]
+  requestFail["Request fails\nno money moved"]
+  tx["Create transaction\nstatus: initiated"]
+  recipient{"Recipient has TUMA wallet?"}
+
+  directChain["Direct on-chain USDC transfer"]
+  directOnchain["Store txHash\nrecord status: onchain"]
+  escrowDeposit["Approve + deposit into TumaEscrow"]
+  escrowOnchain["Store escrowRef + txHash\nrecord status: onchain"]
+  claimLink["Queue WhatsApp claim link"]
+  recipientClaim["Recipient verifies OTP\nclaims escrow on-chain"]
+  claimRecorded["Store claimTxHash\nattach recipient wallet"]
+
+  railQueue["Queue rail_disburse job"]
+  railWorker["rail.worker submits payout"]
+  routed["Record status: routed\nstore railReference"]
+  settleWait{"Settlement confirmation"}
+  settled["Record status: settled"]
+  failed["Record status: failed"]
+  retry["Retry with backoff"]
+  review["Record status: requires_review\ninclude failureStage + failureReason"]
+
+  expiry["Escrow reaches expiresAt\nescrow.worker refund"]
+  expired["Record status: expired\nsender refunded"]
+  scanner["Planned expiry scanner\nfor missed delayed jobs"]
+
+  start --> idem
+  idem -->|yes| replay
+  idem -->|no| lock
+  lock --> validate
+  validate -->|quote expired, wallet missing, insufficient funds| requestFail
+  validate -->|valid| tx
+  tx --> recipient
+
+  recipient -->|yes| directChain
+  directChain -->|broadcast or outcome unclear fails| review
+  directChain -->|confirmed| directOnchain
+  directOnchain --> railQueue
+
+  recipient -->|no| escrowDeposit
+  escrowDeposit -->|deposit fails or outcome unclear| review
+  escrowDeposit -->|confirmed| escrowOnchain
+  escrowOnchain --> claimLink
+  claimLink -->|delivery fails after final retry| review
+  claimLink -->|sent or queued| recipientClaim
+  recipientClaim -->|invalid, expired, wrong phone, wallet not ready| requestFail
+  recipientClaim -.->|post-claim DB unclear next hardening| review
+  recipientClaim -->|confirmed| claimRecorded
+  claimRecorded --> railQueue
+  escrowOnchain -->|not claimed by expiry| expiry
+  expiry -->|refund confirmed| expired
+  expiry -.->|refund retry exhausted next hardening| review
+  scanner -.-> expiry
+
+  railQueue -->|queue add fails| review
+  railQueue -->|queued| railWorker
+  railWorker -->|transient provider failure| retry
+  retry --> railWorker
+  railWorker -->|final retry failure| review
+  railWorker -->|provider accepted| routed
+  routed --> settleWait
+  settleWait -->|webhook or poll success| settled
+  settleWait -->|definite provider failure| failed
+  settleWait -->|stale or ambiguous| review
+
+  classDef success fill:#ecfdf5,stroke:#059669,color:#0f172a;
+  classDef pending fill:#eff6ff,stroke:#2563eb,color:#0f172a;
+  classDef warning fill:#fffbeb,stroke:#d97706,color:#0f172a;
+  classDef failure fill:#fef2f2,stroke:#dc2626,color:#0f172a;
+  classDef planned fill:#f8fafc,stroke:#64748b,stroke-dasharray: 5 5,color:#0f172a;
+
+  class replay,directOnchain,escrowOnchain,claimLink,claimRecorded,routed,settled,expired success;
+  class start,lock,validate,tx,recipient,directChain,escrowDeposit,recipientClaim,railQueue,railWorker,settleWait pending;
+  class retry,review warning;
+  class requestFail,failed failure;
+  class scanner planned;
+```
+
+---
+
+## Send/Escrow Resilience
+
+The send and escrow flow treats on-chain movement as the money boundary. Once funds have moved on-chain, later side effects such as rail payout, claim-link delivery, and settlement confirmation are retried or marked for operator review instead of being reported as a simple request failure.
+
+Implemented guardrails:
+
+- `/api/send` accepts an `idempotencyKey` in the JSON body or `Idempotency-Key` / `X-Idempotency-Key` headers. Replays by the same sender return the original transaction instead of consuming another quote or sending again.
+- Transactions record `requires_review`, `failureStage`, `failureReason`, and `failedAt` when the outcome is unclear after money movement.
+- Rail payouts for direct sends and escrow claims go through the `rail_disburse` queue, with inline fallback only when Redis queues are disabled for local/demo runs.
+- Escrow claim-link notifications use the notification queue and can move a transaction to `requires_review` after final delivery failure.
+- History and tracking APIs expose review metadata so the frontend can stop polling and show "Needs review" rather than spinning forever.
+
+Design decisions and tradeoffs are documented in [docs/adr/](docs/adr/). The current send/escrow failure matrix is in [docs/send-escrow-failure-scenarios.md](docs/send-escrow-failure-scenarios.md).
+
+Main tradeoffs:
+
+- Safer retries require Redis/BullMQ workers in production, plus an operator path for `requires_review`.
+- Returning after queue handoff improves request reliability, but users may see an `onchain` state while rail payout finishes asynchronously.
+- Inline queue fallback keeps local development usable without Redis, but it is not durable and should not be treated as production resilience.
 
 ---
 

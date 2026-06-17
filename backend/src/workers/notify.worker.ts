@@ -13,6 +13,7 @@ import {
   sendClaimLink,
   sendReceivedNotification,
 } from "../services/whatsapp";
+import { recordSettlementStep } from "../services/settlement";
 
 const worker = new Worker<WhatsAppNotifyJob>(
   QUEUE_NAMES.WHATSAPP_NOTIFY,
@@ -56,8 +57,19 @@ worker.on("completed", (job) => {
   console.log(`[NotifyWorker] ✓ Sent ${job.data.templateName} to ${job.data.to}`);
 });
 
-worker.on("failed", (job, err) => {
+worker.on("failed", async (job, err) => {
   console.error(`[NotifyWorker] ✗ Job ${job?.id} failed:`, err.message);
+
+  const attempts = job?.opts.attempts ?? 1;
+  if (
+    job?.data.transactionId &&
+    job.attemptsMade >= attempts
+  ) {
+    await recordSettlementStep(job.data.transactionId, "requires_review", {
+      stage: job.data.failureStage ?? "whatsapp_notify",
+      error: err.message,
+    });
+  }
 });
 
 process.on("SIGTERM", async () => {

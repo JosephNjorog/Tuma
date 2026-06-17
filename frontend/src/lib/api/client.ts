@@ -66,7 +66,14 @@ export type FxQuote = {
 
 // ── Transactions ──────────────────────────────────────────────────────────────
 
-export type TxStatus = "initiated" | "onchain" | "routed" | "settled" | "failed" | "expired";
+export type TxStatus =
+  | "initiated"
+  | "onchain"
+  | "routed"
+  | "settled"
+  | "requires_review"
+  | "failed"
+  | "expired";
 
 export type Notification = {
   id: string;
@@ -89,6 +96,9 @@ export type TxSummary = {
   rail: string;
   status: TxStatus;
   note: string | null;
+  failureStage?: string | null;
+  failureReason?: string | null;
+  failedAt?: string | null;
   createdAt: string;
   settledAt: string | null;
 };
@@ -195,7 +205,14 @@ export const api = {
 
   send: {
     send: (
-      body: { quoteId: string; recipientPhone: string; amountUsd: number; token?: string; note?: string },
+      body: {
+        quoteId: string;
+        recipientPhone: string;
+        amountUsd: number;
+        token?: string;
+        note?: string;
+        idempotencyKey?: string;
+      },
       token: string
     ) =>
       request<{
@@ -209,6 +226,9 @@ export const api = {
         escrowRef?: string;
         claimUrl?: string;
         expiresAt?: string;
+        failureStage?: string | null;
+        failureReason?: string | null;
+        idempotentReplay?: boolean;
       }>("/api/send", { method: "POST", body: JSON.stringify(body), token }),
   },
 

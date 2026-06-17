@@ -21,6 +21,7 @@ export const transactionStatusEnum = pgEnum("transaction_status", [
   "onchain",
   "routed",
   "settled",
+  "requires_review",
   "failed",
   "expired",
 ]);
@@ -129,6 +130,7 @@ export const transactions = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     reference: text("reference").notNull().unique(),
+    idempotencyKey: text("idempotency_key"),
     senderId: uuid("sender_id").references(() => users.id),
     recipientPhone: text("recipient_phone").notNull(),
     recipientWalletAddress: text("recipient_wallet_address"),
@@ -149,6 +151,9 @@ export const transactions = pgTable(
     isMerchantPayment: boolean("is_merchant_payment").default(false).notNull(),
     merchantId: uuid("merchant_id").references(() => users.id),
     feeUsdc: numeric("fee_usdc", { precision: 20, scale: 6 }).default("0").notNull(),
+    failureStage: text("failure_stage"),
+    failureReason: text("failure_reason"),
+    failedAt: timestamp("failed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
     settledAt: timestamp("settled_at"),
@@ -158,6 +163,7 @@ export const transactions = pgTable(
     index("transactions_recipient_user_id_idx").on(t.recipientUserId),
     index("transactions_status_idx").on(t.status),
     index("transactions_reference_idx").on(t.reference),
+    uniqueIndex("transactions_sender_id_idempotency_key_idx").on(t.senderId, t.idempotencyKey),
     index("transactions_created_at_idx").on(t.createdAt),
   ]
 );

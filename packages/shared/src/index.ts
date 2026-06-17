@@ -145,6 +145,12 @@ export const SendMoneySchema = z.object({
   amountUsd: z.number().positive().max(10_000),
   token: z.enum(SUPPORTED_TOKENS).default("USDC"),
   note: z.string().max(140).optional(),
+  idempotencyKey: z
+    .string()
+    .min(8)
+    .max(128)
+    .regex(/^[A-Za-z0-9._:-]+$/, "Use letters, numbers, '.', '_', ':', or '-'")
+    .optional(),
 });
 
 export const WithdrawSchema = z.object({
@@ -190,6 +196,7 @@ export type TransactionStatus =
   | "onchain"
   | "routed"
   | "settled"
+  | "requires_review"
   | "failed"
   | "expired";
 
@@ -213,6 +220,8 @@ export type TransactionSummary = {
   rail: TransactionRail;
   status: TransactionStatus;
   note: string | null;
+  failureStage?: string | null;
+  failureReason?: string | null;
   createdAt: string;
   settledAt: string | null;
 };

@@ -14,8 +14,16 @@ export const Route = createFileRoute("/track/$id")({
 const STATUS_ORDER: TxSummary["status"][] = ["initiated", "onchain", "routed", "settled"];
 
 function stepForStatus(status: TxSummary["status"]) {
+  if (status === "requires_review" || status === "failed" || status === "expired") {
+    return STATUS_ORDER.length - 1;
+  }
   const idx = STATUS_ORDER.indexOf(status);
   return idx === -1 ? 0 : idx;
+}
+
+function statusLabel(status: TxSummary["status"]) {
+  if (status === "requires_review") return "Needs review";
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function Track() {
@@ -33,7 +41,13 @@ function Track() {
     enabled: !!accessToken && !!id,
     refetchInterval: (query) => {
       const status = query.state.data?.transaction?.status;
-      if (!status || status === "settled" || status === "failed" || status === "expired") return false;
+      if (
+        !status ||
+        status === "settled" ||
+        status === "requires_review" ||
+        status === "failed" ||
+        status === "expired"
+      ) return false;
       return 5_000;
     },
   });
@@ -63,14 +77,28 @@ function Track() {
   }
 
   const currentStep = stepForStatus(tx.status);
-  const isPending = tx.status !== "settled" && tx.status !== "failed" && tx.status !== "expired";
-  const isFailed = tx.status === "failed" || tx.status === "expired";
+  const isPending =
+    tx.status !== "settled" &&
+    tx.status !== "requires_review" &&
+    tx.status !== "failed" &&
+    tx.status !== "expired";
+  const needsReview = tx.status === "requires_review";
+  const isFailed = tx.status === "failed" || tx.status === "expired" || needsReview;
 
   const steps = [
     { title: "Initiated", desc: "You signed and broadcast the transfer" },
     { title: "On-chain confirmed", desc: "Avalanche finality reached in ~1s" },
     { title: "Routed to rail", desc: `Autopayke selected ${tx.rail}` },
-    { title: isFailed ? "Failed" : "Settled", desc: isFailed ? (tx.status === "expired" ? "Transfer expired" : "Settlement failed") : isPending ? "Crediting recipient's account…" : `${tx.rail} confirmed credit` },
+    {
+      title: needsReview ? "Needs review" : isFailed ? "Failed" : "Settled",
+      desc: needsReview
+        ? (tx.failureReason ?? "This transfer needs operator review")
+        : isFailed
+          ? (tx.status === "expired" ? "Transfer expired" : "Settlement failed")
+          : isPending
+            ? "Crediting recipient's account…"
+            : `${tx.rail} confirmed credit`,
+    },
   ];
 
   const localLine = tx.amountLocal ? `${tx.localCurrency} ${tx.amountLocal.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : null;
@@ -137,11 +165,13 @@ function Track() {
 
         <div className="px-5 mt-6">
           <div className="rounded-2xl border border-border bg-card divide-y divide-border">
-            <Row k="Status" v={tx.status.charAt(0).toUpperCase() + tx.status.slice(1)} />
+            <Row k="Status" v={statusLabel(tx.status)} />
             <Row k="Asset" v="USDC" />
             <Row k="Rail" v={tx.rail} />
             {fxLine && <Row k="FX rate" v={fxLine} />}
             <Row k="Reference" v={tx.reference} mono />
+            {tx.failureStage && <Row k="Review stage" v={tx.failureStage} />}
+            {tx.failureReason && <Row k="Review reason" v={tx.failureReason} />}
             {settledAt && <Row k="Settled at" v={settledAt} />}
             {tx.note && <Row k="Note" v={tx.note} />}
           </div>

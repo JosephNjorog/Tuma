@@ -33,6 +33,12 @@ export class RateLimitError extends TumaError {
   }
 }
 
+export class ConflictError extends TumaError {
+  constructor(message: string) {
+    super("CONFLICT", message, 409);
+  }
+}
+
 export class FxQuoteExpiredError extends TumaError {
   constructor() {
     super("QUOTE_EXPIRED", "FX quote has expired. Please request a new quote.", 410);

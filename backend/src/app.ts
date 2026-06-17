@@ -59,7 +59,7 @@ app.onError((err, c) => {
   if (isKnownError(err)) {
     return c.json(
       { ok: false, error: err.message, code: err.code },
-      err.statusCode as 400 | 401 | 402 | 404 | 410 | 422 | 429 | 502
+      err.statusCode as 400 | 401 | 402 | 404 | 409 | 410 | 422 | 429 | 502
     );
   }
   console.error("[API] Unhandled error:", err);

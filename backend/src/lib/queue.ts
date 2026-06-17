@@ -52,12 +52,16 @@ export type RailDisburseJob = {
   amountLocal: number;
   localCurrency: string;
   reference: string;
+  failureStage?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type WhatsAppNotifyJob = {
   to: string;
   templateName: string;
   params: string[];
+  transactionId?: string;
+  failureStage?: string;
 };
 
 // ── Queue instances ───────────────────────────────────────────────────────────
@@ -76,34 +80,42 @@ export async function scheduleSettlementPoll(
   rail: string,
   railReference: string,
   delayMs = 10_000
-) {
-  await settlementQueue?.add(
+): Promise<boolean> {
+  if (!settlementQueue) return false;
+  await settlementQueue.add(
     "poll",
     { transactionId, rail, railReference, attempt: 0 },
     { delay: delayMs, attempts: 20, backoff: { type: "exponential", delay: 10_000 } }
   );
+  return true;
 }
 
 export async function scheduleEscrowExpiry(
   job: EscrowExpireJob,
   expiresAt: Date
-) {
+): Promise<boolean> {
+  if (!escrowQueue) return false;
   const delay = expiresAt.getTime() - Date.now();
-  await escrowQueue?.add("expire", job, { delay: Math.max(delay, 0) });
+  await escrowQueue.add("expire", job, { delay: Math.max(delay, 0) });
+  return true;
 }
 
-export async function enqueueRailDisburse(job: RailDisburseJob) {
-  await railQueue?.add("disburse", job, {
+export async function enqueueRailDisburse(job: RailDisburseJob): Promise<boolean> {
+  if (!railQueue) return false;
+  await railQueue.add("disburse", job, {
     attempts: 3,
     backoff: { type: "fixed", delay: 30_000 },
   });
+  return true;
 }
 
-export async function enqueueWhatsAppNotify(job: WhatsAppNotifyJob) {
-  await notifyQueue?.add("notify", job, {
+export async function enqueueWhatsAppNotify(job: WhatsAppNotifyJob): Promise<boolean> {
+  if (!notifyQueue) return false;
+  await notifyQueue.add("notify", job, {
     attempts: 3,
     backoff: { type: "exponential", delay: 5_000 },
   });
+  return true;
 }
 
 export { connection as queueConnection };

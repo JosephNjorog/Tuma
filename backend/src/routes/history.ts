@@ -68,6 +68,8 @@ historyRouter.get("/", zValidator("query", QuerySchema), async (c) => {
     rail: tx.rail,
     status: tx.status,
     note: tx.note,
+    failureStage: tx.failureStage,
+    failureReason: tx.failureReason,
     createdAt: tx.createdAt.toISOString(),
     settledAt: tx.settledAt?.toISOString() ?? null,
   }));

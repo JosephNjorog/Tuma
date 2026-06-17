@@ -100,6 +100,22 @@ export async function del(key: string): Promise<void> {
   if (s) await s.del(key); else await _memStore.del(key);
 }
 
+export async function setnxTtl(
+  key: string,
+  ttlSeconds: number,
+  value = "1"
+): Promise<boolean> {
+  const s = store();
+  if (s) {
+    const result = await s.set(key, value, "EX", ttlSeconds, "NX");
+    return result === "OK";
+  }
+
+  if (_memGet(key)) return false;
+  await _memStore.setex(key, ttlSeconds, value);
+  return true;
+}
+
 export async function incr(key: string, ttlSeconds?: number): Promise<number> {
   const s = store();
   if (s) {
