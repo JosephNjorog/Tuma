@@ -1,4 +1,4 @@
-import { Queue, Worker, type Job } from "bullmq";
+import { Queue, type ConnectionOptions } from "bullmq";
 import IORedis from "ioredis";
 
 const redisUrl = process.env.REDIS_URL;
@@ -11,7 +11,7 @@ const connection = redisUrl
       enableOfflineQueue: false,
       tls: redisUrl.startsWith("rediss://") ? {} : undefined,
     })
-  : (null as unknown as IORedis);
+  : null;
 
 if (connection) {
   connection.on("error", () => {
@@ -65,14 +65,29 @@ export type WhatsAppNotifyJob = {
   failureStage?: string;
 };
 
+type SettlementPollJobName = "poll";
+type EscrowExpireJobName = "expire";
+type RailDisburseJobName = "disburse";
+type WhatsAppNotifyJobName = "notify";
+
 // ── Queue instances ───────────────────────────────────────────────────────────
 
-const queueOpts = connection ? { connection } : { connection: connection as unknown as IORedis };
+export const queueConnection = connection;
+export const queueConnectionOptions = connection as unknown as ConnectionOptions | null;
+const queueOpts = queueConnectionOptions ? { connection: queueConnectionOptions } : null;
 
-export const settlementQueue = connection ? new Queue<SettlementPollJob>(QUEUE_NAMES.SETTLEMENT_POLL, queueOpts) : null;
-export const escrowQueue = connection ? new Queue<EscrowExpireJob>(QUEUE_NAMES.ESCROW_EXPIRE, queueOpts) : null;
-export const railQueue = connection ? new Queue<RailDisburseJob>(QUEUE_NAMES.RAIL_DISBURSE, queueOpts) : null;
-export const notifyQueue = connection ? new Queue<WhatsAppNotifyJob>(QUEUE_NAMES.WHATSAPP_NOTIFY, queueOpts) : null;
+export const settlementQueue = queueOpts
+  ? new Queue<SettlementPollJob, unknown, SettlementPollJobName>(QUEUE_NAMES.SETTLEMENT_POLL, queueOpts)
+  : null;
+export const escrowQueue = queueOpts
+  ? new Queue<EscrowExpireJob, unknown, EscrowExpireJobName>(QUEUE_NAMES.ESCROW_EXPIRE, queueOpts)
+  : null;
+export const railQueue = queueOpts
+  ? new Queue<RailDisburseJob, unknown, RailDisburseJobName>(QUEUE_NAMES.RAIL_DISBURSE, queueOpts)
+  : null;
+export const notifyQueue = queueOpts
+  ? new Queue<WhatsAppNotifyJob, unknown, WhatsAppNotifyJobName>(QUEUE_NAMES.WHATSAPP_NOTIFY, queueOpts)
+  : null;
 
 // ── Scheduling helpers ────────────────────────────────────────────────────────
 
@@ -124,5 +139,3 @@ export async function enqueueWhatsAppNotify(job: WhatsAppNotifyJob): Promise<boo
   });
   return true;
 }
-
-export { connection as queueConnection };
