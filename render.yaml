@@ -228,6 +228,12 @@ services:
         sync: false
       - key: TUMA_PAYMASTER_ADDRESS
         sync: false
+      - key: CHAIN_EVENT_SCAN_LOOKBACK_BLOCKS
+        value: "100000"
+      - key: CHAIN_EVENT_SCAN_BATCH_BLOCKS
+        value: "2000"
+      - key: CHAIN_EVENT_SCAN_CONFIRMATIONS
+        value: "2"
       - key: TREASURY_ADDRESS
         sync: false
       - key: USDC_ADDRESS
