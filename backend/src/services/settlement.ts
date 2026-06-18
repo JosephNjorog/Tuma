@@ -73,7 +73,11 @@ export async function recordSettlementStep(
               failureReason: failureReason ?? null,
               failedAt: new Date(),
             }
-          : {}),
+          : {
+              failureStage: null,
+              failureReason: null,
+              failedAt: null,
+            }),
         ...(step === "settled" ? { settledAt: new Date() } : {}),
       })
       .where(eq(transactions.id, transactionId)),
