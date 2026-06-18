@@ -8,7 +8,10 @@ import {
 } from "../lib/queue";
 import { delIfValue, setnxTtl } from "../lib/redis";
 import { recordSettlementStep } from "./settlement";
-import { processRailDisbursement } from "./rail-disbursement";
+import {
+  processRailDisbursement,
+  railProviderIdempotencyKey,
+} from "./rail-disbursement";
 
 export type EscrowClaimContext = {
   ref: string;
@@ -241,6 +244,10 @@ export function buildClaimRailJob(ctx: EscrowClaimContext): RailDisburseJob {
     amountLocal: ctx.amountLocal,
     localCurrency: ctx.localCurrency,
     reference: ctx.reference,
+    providerIdempotencyKey: railProviderIdempotencyKey(
+      ctx.transactionId,
+      "claim_rail_disbursement"
+    ),
     failureStage: "claim_rail_disbursement",
     metadata: {
       escrowRef: ctx.ref,

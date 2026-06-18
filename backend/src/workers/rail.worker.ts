@@ -10,7 +10,10 @@ import { db } from "../db";
 import { transactions } from "../db/schema";
 import { queueConnection, QUEUE_NAMES, type RailDisburseJob } from "../lib/queue";
 import { recordSettlementStep } from "../services/settlement";
-import { processRailDisbursement } from "../services/rail-disbursement";
+import {
+  processRailDisbursement,
+  railJobWithProviderIdempotency,
+} from "../services/rail-disbursement";
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -19,12 +22,13 @@ function errorMessage(err: unknown): string {
 const worker = new Worker<RailDisburseJob>(
   QUEUE_NAMES.RAIL_DISBURSE,
   async (job: Job<RailDisburseJob>) => {
+    const data = railJobWithProviderIdempotency(job.data);
     const tx = await db.query.transactions.findFirst({
-      where: eq(transactions.id, job.data.transactionId),
+      where: eq(transactions.id, data.transactionId),
     });
 
     if (!tx) {
-      console.warn(`[RailWorker] TX ${job.data.transactionId} not found — skipping`);
+      console.warn(`[RailWorker] TX ${data.transactionId} not found — skipping`);
       return;
     }
 
@@ -39,7 +43,7 @@ const worker = new Worker<RailDisburseJob>(
     }
 
     try {
-      const result = await processRailDisbursement(job.data);
+      const result = await processRailDisbursement(data);
       console.log(
         `[RailWorker] ✓ TX ${tx.id} routed via ${result.rail} ref=${result.railReference}`
       );
@@ -47,8 +51,18 @@ const worker = new Worker<RailDisburseJob>(
       const attempts = job.opts.attempts ?? 1;
       if (job.attemptsMade + 1 >= attempts) {
         await recordSettlementStep(tx.id, "requires_review", {
-          stage: job.data.failureStage ?? "rail_disbursement",
+          ...(data.metadata ?? {}),
+          stage: data.failureStage ?? "rail_disbursement",
           error: errorMessage(err),
+          rail: data.rail,
+          recipientPhone: data.recipientPhone,
+          amountLocal: data.amountLocal,
+          localCurrency: data.localCurrency,
+          reference: data.reference,
+          providerIdempotencyKey: data.providerIdempotencyKey,
+          bullJobId: job.id,
+          attemptsMade: job.attemptsMade + 1,
+          attempts,
         });
       }
       throw err;

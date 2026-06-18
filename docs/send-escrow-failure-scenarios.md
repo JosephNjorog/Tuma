@@ -30,8 +30,8 @@ This matrix tracks the current resilience posture for the send and escrow flows.
 | Rail queue | Rail queue unavailable in local/demo mode | API falls back to inline rail payout. | Implemented | Inline fallback is not durable if the process dies mid-call. | Use a DB outbox for production-like fallback. |
 | Rail queue | Queue add throws in production | Transaction is marked `requires_review`. | Implemented | Operator must decide whether to enqueue/retry manually. | Add operator retry action. |
 | Rail worker | Provider transient failure | BullMQ retries with backoff. | Implemented | User may remain `onchain` until retry succeeds. | Add user-facing "payout in progress" copy per rail. |
-| Rail worker | Provider fails after final retry | Worker marks transaction `requires_review`. | Implemented | Requires operator follow-up; no automated dead-letter view yet. | Add dead-letter queue and dashboard. |
-| Rail worker | Worker receives duplicate job | Worker skips terminal or already-routed transactions. | Implemented | Provider-level duplicate submission still depends on timing and provider idempotency. | Add provider idempotency keys per rail. |
+| Rail worker | Provider fails after final retry | Worker marks transaction `requires_review` with provider idempotency metadata; `/api/ops/rail/dead-letter` lists affected rail payouts and `/retry` requeues or runs the same provider-keyed payout. | Implemented | Visibility is API-level, not a full dashboard; operators still need an `OPERATIONS_API_TOKEN` and runbook. | Add UI/dashboard, alerts, and SLA filters. |
+| Rail worker | Worker receives duplicate job | Worker skips terminal or already-routed transactions; provider calls receive stable idempotency keys derived from transaction and rail failure stage. | Implemented | Provider support varies: MoMo uses the key directly, Paystack/Wave use it as request reference, and M-Pesa stores it as request metadata. | Add provider-specific duplicate-behavior tests/sandbox checks. |
 | Receipt notification | WhatsApp received notification fails | Best-effort notification; money movement is not rolled back. | Partial | Direct-send notification failures are not currently escalated to review. | Decide whether receipt notification failure should be review, alert-only, or ignored. |
 
 ## Escrow Creation For Non-TUMA Recipient
@@ -77,8 +77,8 @@ This matrix tracks the current resilience posture for the send and escrow flows.
 
 ## Current Priority Order
 
-1. Add provider-level rail idempotency keys and dead-letter visibility.
-2. Add operator tools for `requires_review`: resend claim link, retry rail payout, reconcile chain hash, refund escrow.
-3. Add chain-event scanners for post-chain cases where the DB was unavailable before review metadata could be written.
-4. Add scanner/worker heartbeat alerting.
-5. Add integration tests around duplicate sends, duplicate claims, queue failure, final retry review, expiry scanner repair, and escrow claim failure paths.
+1. Add operator tools for non-rail `requires_review`: resend claim link, reconcile chain hash, refund escrow.
+2. Add chain-event scanners for post-chain cases where the DB was unavailable before review metadata could be written.
+3. Add scanner/worker heartbeat alerting.
+4. Add integration tests around duplicate sends, duplicate claims, rail idempotency, dead-letter retry, queue failure, final retry review, expiry scanner repair, and escrow claim failure paths.
+5. Add an operator dashboard over the existing dead-letter/review APIs.

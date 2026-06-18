@@ -10,6 +10,7 @@ export type DisburseParams = {
   amountLocal: number;
   localCurrency: string;
   reference: string;
+  providerIdempotencyKey: string;
 };
 
 export type DisburseResult = {
@@ -35,7 +36,8 @@ export async function disburseToRail(params: DisburseParams): Promise<DisburseRe
       const result = await sendB2C(
         params.recipientPhone,
         params.amountLocal,
-        params.reference
+        params.reference,
+        params.providerIdempotencyKey
       );
       return { rail, ...result };
     }
@@ -46,7 +48,8 @@ export async function disburseToRail(params: DisburseParams): Promise<DisburseRe
         params.recipientPhone,
         params.amountLocal,
         currency,
-        params.reference
+        params.reference,
+        params.providerIdempotencyKey
       );
       return { rail, ...result };
     }
@@ -64,7 +67,8 @@ export async function disburseToRail(params: DisburseParams): Promise<DisburseRe
       const result = await sendTransfer(
         params.amountLocal,
         recipientCode,
-        params.reference
+        params.reference,
+        params.providerIdempotencyKey
       );
       return { rail, ...result };
     }
@@ -73,7 +77,8 @@ export async function disburseToRail(params: DisburseParams): Promise<DisburseRe
       const result = await sendWavePayout(
         params.recipientPhone,
         params.amountLocal,
-        params.reference
+        params.reference,
+        params.providerIdempotencyKey
       );
       return { rail, ...result };
     }

@@ -42,7 +42,8 @@ export type WavePayoutResult = {
 export async function sendWavePayout(
   phone: string,
   amount: number,
-  ref: string
+  ref: string,
+  idempotencyKey: string
 ): Promise<WavePayoutResult> {
   const data = await waveFetch<{
     id: string;
@@ -54,7 +55,7 @@ export async function sendWavePayout(
       receive_amount: Math.round(amount).toString(),
       mobile: phone,
       name: "Autopayke recipient",
-      client_reference: ref,
+      client_reference: idempotencyKey,
       business_id: WAVE_BUSINESS_ID,
     }),
   });

@@ -9,6 +9,7 @@ import { withdrawLimiter } from "../middleware/rateLimit";
 import { getMidRate, computeCashoutFeeUsd } from "../services/fx";
 import { transferUsdc, getUsdcBalance } from "../services/avalanche";
 import { disburseToRail } from "../services/rails";
+import { railProviderIdempotencyKey } from "../services/rail-disbursement";
 import { startSettlementFlow, recordSettlementStep } from "../services/settlement";
 import { generateTxRef } from "../lib/crypto";
 import { InsufficientFundsError, NotFoundError, ValidationError, BlockchainError } from "../lib/errors";
@@ -85,6 +86,10 @@ withdrawRouter.post(
       amountLocal,
       localCurrency: country.currency,
       reference,
+      providerIdempotencyKey: railProviderIdempotencyKey(
+        tx.id,
+        "withdraw_rail_disbursement"
+      ),
     });
 
     await startSettlementFlow(tx.id, txHash, country.primaryRail as Rail, railReference);

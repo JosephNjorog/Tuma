@@ -5,7 +5,6 @@
  */
 
 import { RailError } from "../../lib/errors";
-import { randomUUID } from "crypto";
 
 const BASE_URL =
   process.env.MOMO_ENV === "production"
@@ -60,10 +59,10 @@ export async function sendMomoTransfer(
   phone: string,
   amount: number,
   currency: "GHS" | "UGX",
-  ref: string
+  ref: string,
+  idempotencyKey: string
 ): Promise<MomoTransferResult> {
   const token = await getAccessToken();
-  const externalId = randomUUID();
 
   // MoMo expects phone without '+'
   const msisdn = phone.replace("+", "");
@@ -71,7 +70,7 @@ export async function sendMomoTransfer(
   const payload = {
     amount: Math.round(amount).toString(),
     currency,
-    externalId,
+    externalId: idempotencyKey,
     payee: {
       partyIdType: "MSISDN",
       partyId: msisdn,
@@ -84,7 +83,7 @@ export async function sendMomoTransfer(
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "X-Reference-Id": externalId,
+      "X-Reference-Id": idempotencyKey,
       "X-Target-Environment": targetEnvironment(currency),
       "Ocp-Apim-Subscription-Key": process.env.MOMO_SUBSCRIPTION_KEY!,
       "Content-Type": "application/json",
@@ -99,7 +98,7 @@ export async function sendMomoTransfer(
   }
 
   return {
-    railReference: externalId,
+    railReference: idempotencyKey,
     status: "pending",
   };
 }

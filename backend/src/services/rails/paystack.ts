@@ -76,7 +76,8 @@ export type PaystackTransferResult = {
 export async function sendTransfer(
   amount: number,
   recipientCode: string,
-  ref: string
+  ref: string,
+  idempotencyKey: string
 ): Promise<PaystackTransferResult> {
   const data = await paystackFetch<{
     transfer_code: string;
@@ -89,12 +90,12 @@ export async function sendTransfer(
       amount: Math.round(amount * 100), // NGN to kobo
       recipient: recipientCode,
       reason: `Autopayke transfer ${ref}`,
-      reference: ref,
+      reference: idempotencyKey,
     }),
   });
 
   return {
-    railReference: data.reference,
+    railReference: data.transfer_code,
     transferCode: data.transfer_code,
     status: data.status === "success" ? "settled" : "pending",
   };

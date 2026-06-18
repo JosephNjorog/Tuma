@@ -241,6 +241,7 @@ bun install
 ```bash
 cp .env.example backend/.env
 # Fill in all values — see .env.example for documentation
+# Set OPERATIONS_API_TOKEN to enable /api/ops/* recovery endpoints.
 ```
 
 ### 3. Start the database
@@ -459,6 +460,7 @@ flowchart TD
 
   railQueue["Queue rail_disburse job"]
   railWorker["rail.worker submits payout"]
+  railDeadLetter["Rail dead-letter API\nlist + retry with same provider key"]
   routed["Record status: routed\nstore railReference"]
   settleWait{"Settlement confirmation"}
   settled["Record status: settled"]
@@ -505,6 +507,8 @@ flowchart TD
   railWorker -->|transient provider failure| retry
   retry --> railWorker
   railWorker -->|final retry failure| review
+  review -->|rail failureStage| railDeadLetter
+  railDeadLetter -->|operator retry| railQueue
   railWorker -->|provider accepted| routed
   routed --> settleWait
   settleWait -->|webhook or poll success| settled
@@ -517,7 +521,7 @@ flowchart TD
   classDef failure fill:#fef2f2,stroke:#dc2626,color:#0f172a;
 
   class replay,directOnchain,escrowOnchain,claimLink,claimRecorded,routed,settled,expired success;
-  class start,lock,validate,tx,recipient,directChain,escrowDeposit,recipientClaim,claimScan,railQueue,railWorker,settleWait,scanner pending;
+  class start,lock,validate,tx,recipient,directChain,escrowDeposit,recipientClaim,claimScan,railQueue,railWorker,railDeadLetter,settleWait,scanner pending;
   class retry,review warning;
   class requestFail,failed failure;
 ```
@@ -533,6 +537,8 @@ Implemented guardrails:
 - `/api/send` accepts an `idempotencyKey` in the JSON body or `Idempotency-Key` / `X-Idempotency-Key` headers. Replays by the same sender return the original transaction instead of consuming another quote or sending again.
 - Transactions record `requires_review`, `failureStage`, `failureReason`, and `failedAt` when the outcome is unclear after money movement.
 - Rail payouts for direct sends and escrow claims go through the `rail_disburse` queue, with inline fallback only when Redis queues are disabled for local/demo runs.
+- Rail payout jobs carry stable provider idempotency keys; MoMo, Paystack, Wave, and M-Pesa receive the same key on retry instead of a fresh payout identity.
+- Rail final failures are visible through `GET /api/ops/rail/dead-letter`, and operators can retry with `POST /api/ops/rail/dead-letter/:transactionId/retry` using `X-Operations-Token`.
 - Escrow claim-link notifications use the notification queue and can move a transaction to `requires_review` after final delivery failure.
 - Escrow claims use a tokenized escrow-ref lock to serialize duplicate taps, then replay the claimed state for the same recipient after the first claim succeeds.
 - Claim retries and `escrow.worker` reconciliation both retry local claim persistence and rail handoff for `escrow_claim_db_update` review records after an on-chain claim has already succeeded.
@@ -545,6 +551,8 @@ Main tradeoffs:
 
 - Safer retries require Redis/BullMQ workers in production, plus an operator path for `requires_review`.
 - Returning after queue handoff improves request reliability, but users may see an `onchain` state while rail payout finishes asynchronously.
+- Provider idempotency semantics still vary by rail; sandbox checks and provider-specific tests are needed before treating duplicate prevention as complete.
+- The dead-letter surface is an API, not a full dashboard; production needs alerts and an operator runbook.
 - Claim reconciliation depends on the backend recording review metadata after the chain claim; a full DB outage at that instant still needs chain-event reconciliation or operator lookup.
 - Inline queue fallback keeps local development usable without Redis, but it is not durable and should not be treated as production resilience.
 

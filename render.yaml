@@ -12,6 +12,7 @@
 #   DATABASE_URL            → your Neon PostgreSQL connection string
 #   JWT_ACCESS_SECRET       → (copy from backend/.env — the generated value)
 #   JWT_REFRESH_SECRET      → (copy from backend/.env — the generated value)
+#   OPERATIONS_API_TOKEN    → secret token for /api/ops/* recovery endpoints
 #   WALLET_DERIVE_SECRET    → (copy from backend/.env — NEVER rotate after launch)
 #   PAYSTACK_SECRET_KEY     → sk_live_...
 #   PAYSTACK_WEBHOOK_SECRET → from Paystack dashboard → Settings → Webhooks
@@ -70,6 +71,10 @@ services:
         value: 15m
       - key: JWT_REFRESH_EXPIRES_IN
         value: 30d
+
+      # ── Operations API (set manually; protects /api/ops/*) ────────────────
+      - key: OPERATIONS_API_TOKEN
+        sync: false
 
       # ── Wallet derivation (set manually — NEVER rotate after first deploy) ─
       - key: WALLET_DERIVE_SECRET

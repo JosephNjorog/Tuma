@@ -14,7 +14,10 @@ import {
   getUsdcBalance,
 } from "../services/avalanche";
 import { recordSettlementStep } from "../services/settlement";
-import { processRailDisbursement } from "../services/rail-disbursement";
+import {
+  processRailDisbursement,
+  railProviderIdempotencyKey,
+} from "../services/rail-disbursement";
 import { sendClaimLink, sendReceivedNotification } from "../services/whatsapp";
 import { hashPhone, generateTxRef, generateEscrowRef } from "../lib/crypto";
 import {
@@ -290,6 +293,10 @@ sendRouter.post(
           amountLocal: netAmountLocal,
           localCurrency: quote.toCurrency,
           reference,
+          providerIdempotencyKey: railProviderIdempotencyKey(
+            tx.id,
+            "direct_rail_disbursement"
+          ),
           failureStage: "direct_rail_disbursement",
           metadata: { txHash },
         };
