@@ -52,6 +52,7 @@ export type RailDisburseJob = {
   amountLocal: number;
   localCurrency: string;
   reference: string;
+  providerIdempotencyKey?: string;
   failureStage?: string;
   metadata?: Record<string, unknown>;
 };
