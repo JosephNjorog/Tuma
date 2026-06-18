@@ -1,21 +1,107 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { db } from "../db";
-import { escrowPayments, transactions, users } from "../db/schema";
+import { escrowPayments, users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
-import { recordSettlementStep } from "../services/settlement";
-import { processRailDisbursement } from "../services/rail-disbursement";
 import { claimEscrowOnChain } from "../services/avalanche";
 import { signEscrowClaim } from "../lib/escrow-signer";
-import { enqueueRailDisburse, type RailDisburseJob } from "../lib/queue";
-import { EscrowError, NotFoundError } from "../lib/errors";
+import {
+  reconcileEscrowClaim,
+  reconcileEscrowClaimReview,
+  markEscrowClaimDbUpdateRequiresReview,
+  type ClaimRailHandoffResult,
+  type EscrowClaimContext,
+} from "../services/escrow-claim";
+import { delIfValue, setnxTtl } from "../lib/redis";
+import { ConflictError, EscrowError, NotFoundError } from "../lib/errors";
 
 export const claimRouter = new Hono();
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+const CLAIM_LOCK_TTL_SECONDS = 180;
+
+type ClaimLock = {
+  key: string;
+  token: string;
+};
+
+type ClaimReplayEscrow = {
+  ref: string;
+  transactionId: string;
+  claimTxHash: string | null;
+  claimedByWallet: string | null;
+  amountUsdc: string;
+  transaction: {
+    amountLocal: string;
+    localCurrency: string;
+    rail: string;
+    reference: string;
+    railReference: string | null;
+    status: string;
+  };
+};
+
+async function acquireClaimLock(ref: string): Promise<ClaimLock | null> {
+  const key = `lock:escrow-claim:${ref}`;
+  const token = randomUUID();
+  const acquired = await setnxTtl(key, CLAIM_LOCK_TTL_SECONDS, token);
+  return acquired ? { key, token } : null;
+}
+
+async function releaseClaimLock(lock: ClaimLock | null): Promise<void> {
+  if (!lock) return;
+
+  try {
+    await delIfValue(lock.key, lock.token);
+  } catch (err) {
+    console.error(`[Claim] Failed to release lock ${lock.key}:`, errorMessage(err));
+  }
+}
+
+function claimResponseData(
+  ctx: EscrowClaimContext,
+  handoff: ClaimRailHandoffResult,
+  message: string
+) {
+  return {
+    ref: ctx.ref,
+    amountUsdc: parseFloat(ctx.amountUsdc),
+    amountLocal: ctx.amountLocal,
+    localCurrency: ctx.localCurrency,
+    rail: handoff.rail,
+    railReference: handoff.railReference,
+    railQueued: handoff.railQueued,
+    status: handoff.status,
+    claimTxHash: ctx.claimTxHash,
+    transactionId: ctx.transactionId,
+    message,
+  };
+}
+
+function replayStatus(status: string): ClaimRailHandoffResult["status"] {
+  if (status === "routed" || status === "settled" || status === "requires_review") {
+    return status;
+  }
+
+  return "onchain";
+}
+
+function claimHandoffMessage(handoff: ClaimRailHandoffResult): string {
+  if (handoff.status === "requires_review") {
+    return "Payment claimed on-chain, but payout needs manual review.";
+  }
+
+  if (handoff.railQueued) {
+    return "Payment claimed and queued for payout.";
+  }
+
+  return "Payment claimed and on its way to your mobile money account.";
 }
 
 // GET /api/claim/:ref  ─── Preview claim (no auth required so non-users can see it)
@@ -74,118 +160,185 @@ claimRouter.post(
     });
 
     if (!escrow) throw new NotFoundError("Claim");
-    if (escrow.status !== "pending") throw new EscrowError(`Payment already ${escrow.status}`);
-    if (new Date() > escrow.expiresAt) throw new EscrowError("Claim link has expired");
     if (escrow.recipientPhone !== phone) throw new EscrowError("This claim is not for your phone number");
 
     const recipient = await db.query.users.findFirst({ where: eq(users.id, userId) });
     if (!recipient) throw new NotFoundError("User");
     if (!recipient.walletAddress) throw new EscrowError("Wallet not yet deployed. Try again in a moment.");
+    const recipientWalletAddress = recipient.walletAddress;
 
-    // Produce TUMA signer authorization and unlock USDC on-chain
-    const chainId = parseInt(process.env.AVALANCHE_CHAIN_ID ?? "43114", 10);
-    const sig = await signEscrowClaim(ref, recipient.walletAddress as `0x${string}`, chainId);
-    const claimTxHash = await claimEscrowOnChain(ref, recipient.walletAddress as `0x${string}`, sig);
-
-    // Mark escrow as claimed in DB
-    await db
-      .update(escrowPayments)
-      .set({
-        status: "claimed",
-        claimTxHash,
-        claimedByWallet: recipient.walletAddress,
-        claimedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(escrowPayments.ref, ref));
-
-    // Attach the claiming user and record the on-chain claim before rail payout.
-    await db
-      .update(transactions)
-      .set({
+    function claimedReplayResponse(claimedEscrow: ClaimReplayEscrow) {
+      const claimTxHash = claimedEscrow.claimTxHash ?? "";
+      const ctx: EscrowClaimContext = {
+        ref: claimedEscrow.ref,
+        transactionId: claimedEscrow.transactionId,
         recipientUserId: userId,
-        recipientWalletAddress: recipient.walletAddress,
-        updatedAt: new Date(),
-      })
-      .where(eq(transactions.id, escrow.transactionId));
-
-    await recordSettlementStep(escrow.transactionId, "onchain", {
-      escrowRef: ref,
-      claimedBy: phone,
-      claimTxHash,
-    });
-
-    const railJob: RailDisburseJob = {
-      transactionId: escrow.transactionId,
-      rail: escrow.transaction.rail,
-      recipientPhone: phone,
-      amountLocal: parseFloat(escrow.transaction.amountLocal),
-      localCurrency: escrow.transaction.localCurrency,
-      reference: escrow.transaction.reference,
-      failureStage: "claim_rail_disbursement",
-      metadata: {
-        escrowRef: ref,
-        claimedBy: phone,
+        recipientPhone: phone,
+        recipientWalletAddress,
         claimTxHash,
-      },
-    };
-
-    let railQueued = false;
-    let railReference: string | null = null;
-    let rail = railJob.rail;
-    let status = "onchain";
-
-    try {
-      railQueued = await enqueueRailDisburse(railJob);
-
-      if (!railQueued) {
-        const result = await processRailDisbursement(railJob);
-        rail = result.rail;
-        railReference = result.railReference;
-        status = result.status === "settled" ? "settled" : "routed";
-      }
-    } catch (err) {
-      await recordSettlementStep(escrow.transactionId, "requires_review", {
-        stage: "claim_rail_disbursement",
-        error: errorMessage(err),
-        escrowRef: ref,
-        claimedBy: phone,
-        claimTxHash,
-      });
+        amountUsdc: claimedEscrow.amountUsdc,
+        amountLocal: parseFloat(claimedEscrow.transaction.amountLocal),
+        localCurrency: claimedEscrow.transaction.localCurrency,
+        rail: claimedEscrow.transaction.rail,
+        reference: claimedEscrow.transaction.reference,
+      };
 
       return c.json({
         ok: true,
-        data: {
-          ref,
-          amountUsdc: parseFloat(escrow.amountUsdc),
-          amountLocal: parseFloat(escrow.transaction.amountLocal),
-          localCurrency: escrow.transaction.localCurrency,
-          rail,
-          railReference,
-          railQueued,
-          status: "requires_review",
-          transactionId: escrow.transactionId,
-          message: "Payment claimed on-chain, but payout needs manual review.",
-        },
+        data: claimResponseData(
+          ctx,
+          {
+            rail: claimedEscrow.transaction.rail,
+            railReference: claimedEscrow.transaction.railReference,
+            railQueued: false,
+            status: replayStatus(claimedEscrow.transaction.status),
+          },
+          "Payment already claimed."
+        ),
       });
     }
 
-    return c.json({
-      ok: true,
-      data: {
+    const hasPendingClaimReview =
+      escrow.status === "pending" &&
+      escrow.transaction.status === "requires_review" &&
+      escrow.transaction.failureStage === "escrow_claim_db_update";
+
+    if (escrow.status !== "pending") {
+      if (
+        escrow.status === "claimed" &&
+        escrow.claimedByWallet === recipientWalletAddress
+      ) {
+        return claimedReplayResponse(escrow);
+      }
+
+      throw new EscrowError(`Payment already ${escrow.status}`);
+    }
+
+    if (!hasPendingClaimReview && new Date() > escrow.expiresAt) {
+      throw new EscrowError("Claim link has expired");
+    }
+
+    const lockKey = await acquireClaimLock(ref);
+    if (!lockKey) {
+      const latest = await db.query.escrowPayments.findFirst({
+        where: eq(escrowPayments.ref, ref),
+        with: { transaction: true },
+      });
+
+      if (
+        latest?.status === "claimed" &&
+        latest.claimedByWallet === recipientWalletAddress
+      ) {
+        return claimedReplayResponse(latest);
+      }
+
+      throw new ConflictError("This claim is already being processed.");
+    }
+
+    try {
+      const latest = await db.query.escrowPayments.findFirst({
+        where: eq(escrowPayments.ref, ref),
+        with: { transaction: true },
+      });
+
+      if (!latest) throw new NotFoundError("Claim");
+      if (
+        latest.status === "claimed" &&
+        latest.claimedByWallet === recipientWalletAddress
+      ) {
+        return claimedReplayResponse(latest);
+      }
+      if (latest.status !== "pending") throw new EscrowError(`Payment already ${latest.status}`);
+
+      if (
+        latest.transaction.status === "requires_review" &&
+        latest.transaction.failureStage === "escrow_claim_db_update"
+      ) {
+        try {
+          const replay = await reconcileEscrowClaimReview(
+            latest.transactionId,
+            "claim_route_retry"
+          );
+
+          if (replay) {
+            return c.json({
+              ok: true,
+              data: claimResponseData(
+                replay.ctx,
+                replay.handoff,
+                claimHandoffMessage(replay.handoff)
+              ),
+            });
+          }
+        } catch (err) {
+          console.error(
+            `[Claim] Failed to replay claim reconciliation for ${ref}:`,
+            errorMessage(err)
+          );
+        }
+
+        throw new ConflictError("This claim is already being reconciled.");
+      }
+
+      if (new Date() > latest.expiresAt) throw new EscrowError("Claim link has expired");
+
+      // Produce TUMA signer authorization and unlock USDC on-chain.
+      const chainId = parseInt(process.env.AVALANCHE_CHAIN_ID ?? "43114", 10);
+      const sig = await signEscrowClaim(ref, recipientWalletAddress as `0x${string}`, chainId);
+      const claimTxHash = await claimEscrowOnChain(ref, recipientWalletAddress as `0x${string}`, sig);
+
+      const claimCtx: EscrowClaimContext = {
         ref,
-        amountUsdc: parseFloat(escrow.amountUsdc),
-        amountLocal: parseFloat(escrow.transaction.amountLocal),
-        localCurrency: escrow.transaction.localCurrency,
-        rail,
-        railReference,
-        railQueued,
-        status,
-        transactionId: escrow.transactionId,
-        message: railQueued
-          ? "Payment claimed and queued for payout."
-          : "Payment claimed and on its way to your mobile money account.",
-      },
-    });
+        transactionId: latest.transactionId,
+        recipientUserId: userId,
+        recipientPhone: phone,
+        recipientWalletAddress,
+        claimTxHash,
+        amountUsdc: latest.amountUsdc,
+        amountLocal: parseFloat(latest.transaction.amountLocal),
+        localCurrency: latest.transaction.localCurrency,
+        rail: latest.transaction.rail,
+        reference: latest.transaction.reference,
+      };
+
+      let handoff: ClaimRailHandoffResult;
+      try {
+        handoff = await reconcileEscrowClaim(claimCtx, "claim_route");
+      } catch (err) {
+        try {
+          await markEscrowClaimDbUpdateRequiresReview(claimCtx, err, "claim_route");
+        } catch (reviewErr) {
+          console.error(
+            `[Claim] Failed to record claim reconciliation review for ${ref}:`,
+            errorMessage(reviewErr)
+          );
+        }
+
+        return c.json({
+          ok: true,
+          data: claimResponseData(
+            claimCtx,
+            {
+              rail: claimCtx.rail,
+              railReference: null,
+              railQueued: false,
+              status: "requires_review",
+            },
+            "Payment claimed on-chain, but local reconciliation needs manual review."
+          ),
+        });
+      }
+
+      return c.json({
+        ok: true,
+        data: claimResponseData(
+          claimCtx,
+          handoff,
+          claimHandoffMessage(handoff)
+        ),
+      });
+    } finally {
+      await releaseClaimLock(lockKey);
+    }
   }
 );

@@ -17,6 +17,11 @@ const _memStore = {
     _mem.set(key, { value, expiresAt: Date.now() + ttl * 1000 });
   },
   async del(key: string) { _mem.delete(key); },
+  async delIfValue(key: string, value: string): Promise<boolean> {
+    if (_memGet(key) !== value) return false;
+    _mem.delete(key);
+    return true;
+  },
   async incr(key: string): Promise<number> {
     const cur = parseInt(_memGet(key) ?? "0", 10);
     const next = cur + 1;
@@ -98,6 +103,21 @@ export async function getJson<T>(key: string): Promise<T | null> {
 export async function del(key: string): Promise<void> {
   const s = store();
   if (s) await s.del(key); else await _memStore.del(key);
+}
+
+export async function delIfValue(key: string, value: string): Promise<boolean> {
+  const s = store();
+  if (s) {
+    const result = await s.eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+      1,
+      key,
+      value
+    );
+    return Number(result) === 1;
+  }
+
+  return _memStore.delIfValue(key, value);
 }
 
 export async function setnxTtl(

@@ -1,7 +1,9 @@
 /**
- * Escrow expiry worker.
+ * Escrow resilience worker.
  * Consumes delayed expiry jobs and periodically scans for expired pending
- * escrows whose delayed jobs were missed or lost.
+ * escrows whose delayed jobs were missed or lost. It also retries local
+ * reconciliation for claims that succeeded on-chain but failed during the
+ * post-chain database update.
  */
 
 import { Worker, type Job } from "bullmq";
@@ -11,6 +13,7 @@ import {
   processEscrowExpiry,
   scanExpiredEscrows,
 } from "../services/escrow-expiry";
+import { scanEscrowClaimReconciliations } from "../services/escrow-claim";
 
 function intEnv(name: string, fallback: number): number {
   const value = parseInt(process.env[name] ?? "", 10);
@@ -24,6 +27,7 @@ const SCAN_INTERVAL_MS = Math.max(
 const SCAN_LIMIT = intEnv("ESCROW_EXPIRY_SCAN_LIMIT", 100);
 
 let scannerRunning = false;
+let claimScannerRunning = false;
 
 const worker = queueConnection
   ? new Worker<EscrowExpireJob>(
@@ -78,9 +82,29 @@ async function runExpiredEscrowScan(): Promise<void> {
   }
 }
 
+async function runClaimReconciliationScan(): Promise<void> {
+  if (claimScannerRunning) return;
+  claimScannerRunning = true;
+
+  try {
+    const result = await scanEscrowClaimReconciliations(SCAN_LIMIT);
+    if (result.reconciled > 0 || result.failed > 0) {
+      console.log(
+        `[EscrowWorker] Scan claim reconciliations: scanned=${result.scanned} reconciled=${result.reconciled} skipped=${result.skipped} failed=${result.failed}`
+      );
+    }
+  } catch (err) {
+    console.error("[EscrowWorker] Claim reconciliation scan failed:", (err as Error).message);
+  } finally {
+    claimScannerRunning = false;
+  }
+}
+
 void runExpiredEscrowScan();
+void runClaimReconciliationScan();
 const scannerTimer = setInterval(() => {
   void runExpiredEscrowScan();
+  void runClaimReconciliationScan();
 }, SCAN_INTERVAL_MS);
 
 process.on("SIGTERM", async () => {

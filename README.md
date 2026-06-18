@@ -259,7 +259,7 @@ bun db:push
 ```bash
 bun run dev:backend          # API server on http://localhost:3001
 bun run worker:settlement    # Settlement polling worker (separate terminal)
-bun run worker:escrow        # Escrow expiry worker (separate terminal)
+bun run worker:escrow        # Escrow expiry and claim reconciliation worker
 bun run worker:rail          # Rail payout worker (separate terminal)
 bun run worker:notify        # WhatsApp notification worker (separate terminal)
 ```
@@ -398,7 +398,7 @@ flowchart LR
   railWorker["rail.worker\nretry payouts"]
   notifyWorker["notify.worker\nretry messages"]
   settlementWorker["settlement.worker\npoll rail status"]
-  escrowWorker["escrow.worker\nrefund expired escrow"]
+  escrowWorker["escrow.worker\nrefund expired escrow + reconcile claims"]
 
   app -->|JWT, idempotency key| api
   api -->|read/write state| db
@@ -435,7 +435,7 @@ flowchart LR
 
 ### Send/Escrow Success And Failure Paths
 
-Legend: green is successful state progression, blue is active processing, amber is retry/review, red is terminal failure or no-money-moved request failure, and dashed paths are planned hardening called out in the failure matrix.
+Legend: green is successful state progression, blue is active processing, amber is retry/review, and red is terminal failure or no-money-moved request failure.
 
 ```mermaid
 flowchart TD
@@ -455,6 +455,7 @@ flowchart TD
   claimLink["Queue WhatsApp claim link"]
   recipientClaim["Recipient verifies OTP\nclaims escrow on-chain"]
   claimRecorded["Store claimTxHash\nattach recipient wallet"]
+  claimScan["Claim reconciliation scanner\nrepairs post-chain DB updates"]
 
   railQueue["Queue rail_disburse job"]
   railWorker["rail.worker submits payout"]
@@ -489,7 +490,9 @@ flowchart TD
   claimLink -->|delivery fails after final retry| review
   claimLink -->|sent or queued| recipientClaim
   recipientClaim -->|invalid, expired, wrong phone, wallet not ready| requestFail
-  recipientClaim -.->|post-claim DB unclear next hardening| review
+  recipientClaim -->|post-chain DB update unclear| review
+  review -->|failureStage: escrow_claim_db_update| claimScan
+  claimScan -->|replay local claim persistence| claimRecorded
   recipientClaim -->|confirmed| claimRecorded
   claimRecorded --> railQueue
   escrowOnchain -->|not claimed by expiry| expiry
@@ -512,13 +515,11 @@ flowchart TD
   classDef pending fill:#eff6ff,stroke:#2563eb,color:#0f172a;
   classDef warning fill:#fffbeb,stroke:#d97706,color:#0f172a;
   classDef failure fill:#fef2f2,stroke:#dc2626,color:#0f172a;
-  classDef planned fill:#f8fafc,stroke:#64748b,stroke-dasharray: 5 5,color:#0f172a;
 
   class replay,directOnchain,escrowOnchain,claimLink,claimRecorded,routed,settled,expired success;
-  class start,lock,validate,tx,recipient,directChain,escrowDeposit,recipientClaim,railQueue,railWorker,settleWait,scanner pending;
+  class start,lock,validate,tx,recipient,directChain,escrowDeposit,recipientClaim,claimScan,railQueue,railWorker,settleWait,scanner pending;
   class retry,review warning;
   class requestFail,failed failure;
-  class scanner planned;
 ```
 
 ---
@@ -533,6 +534,8 @@ Implemented guardrails:
 - Transactions record `requires_review`, `failureStage`, `failureReason`, and `failedAt` when the outcome is unclear after money movement.
 - Rail payouts for direct sends and escrow claims go through the `rail_disburse` queue, with inline fallback only when Redis queues are disabled for local/demo runs.
 - Escrow claim-link notifications use the notification queue and can move a transaction to `requires_review` after final delivery failure.
+- Escrow claims use a tokenized escrow-ref lock to serialize duplicate taps, then replay the claimed state for the same recipient after the first claim succeeds.
+- Claim retries and `escrow.worker` reconciliation both retry local claim persistence and rail handoff for `escrow_claim_db_update` review records after an on-chain claim has already succeeded.
 - Escrow expiry uses deterministic delayed jobs plus a periodic scanner in `escrow.worker`, so expired pending escrows are re-enqueued or refunded even if the original delayed job was missed.
 - History and tracking APIs expose review metadata so the frontend can stop polling and show "Needs review" rather than spinning forever.
 
@@ -542,6 +545,7 @@ Main tradeoffs:
 
 - Safer retries require Redis/BullMQ workers in production, plus an operator path for `requires_review`.
 - Returning after queue handoff improves request reliability, but users may see an `onchain` state while rail payout finishes asynchronously.
+- Claim reconciliation depends on the backend recording review metadata after the chain claim; a full DB outage at that instant still needs chain-event reconciliation or operator lookup.
 - Inline queue fallback keeps local development usable without Redis, but it is not durable and should not be treated as production resilience.
 
 ---
