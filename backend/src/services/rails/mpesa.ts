@@ -48,7 +48,8 @@ export type MpesaB2CResult = {
 export async function sendB2C(
   phone: string,
   amount: number,
-  ref: string
+  ref: string,
+  idempotencyKey: string
 ): Promise<MpesaB2CResult> {
   const token = await getAccessToken();
 
@@ -65,6 +66,7 @@ export async function sendB2C(
     Remarks: `Autopayke transfer ${ref}`,
     QueueTimeOutURL: `${process.env.API_BASE_URL}/webhooks/mpesa/timeout`,
     ResultURL: `${process.env.API_BASE_URL}/webhooks/mpesa/result`,
+    OriginatorConversationID: idempotencyKey,
     Occasion: ref,
   };
 
