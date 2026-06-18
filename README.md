@@ -467,6 +467,7 @@ flowchart TD
   failed["Record status: failed"]
   retry["Retry with backoff"]
   review["Record status: requires_review\ninclude failureStage + failureReason"]
+  reviewOps["Ops review API\nresend link + attach txHash + retry refund"]
 
   expiry["Escrow reaches expiresAt\nescrow.worker refund"]
   expired["Record status: expired\nsender refunded"]
@@ -482,6 +483,8 @@ flowchart TD
 
   recipient -->|yes| directChain
   directChain -->|broadcast or outcome unclear fails| review
+  review -->|operator supplies confirmed txHash| reviewOps
+  reviewOps -->|attach chain anchor, still needs review| review
   directChain -->|confirmed| directOnchain
   directOnchain --> railQueue
 
@@ -490,6 +493,7 @@ flowchart TD
   escrowDeposit -->|confirmed| escrowOnchain
   escrowOnchain --> claimLink
   claimLink -->|delivery fails after final retry| review
+  reviewOps -->|resend claim link| claimLink
   claimLink -->|sent or queued| recipientClaim
   recipientClaim -->|invalid, expired, wrong phone, wallet not ready| requestFail
   recipientClaim -->|post-chain DB update unclear| review
@@ -500,6 +504,7 @@ flowchart TD
   escrowOnchain -->|not claimed by expiry| expiry
   expiry -->|refund confirmed| expired
   expiry -->|refund retry exhausted| review
+  reviewOps -->|retry escrow refund| expiry
   scanner -->|finds expired pending escrow| expiry
 
   railQueue -->|queue add fails| review
@@ -521,7 +526,7 @@ flowchart TD
   classDef failure fill:#fef2f2,stroke:#dc2626,color:#0f172a;
 
   class replay,directOnchain,escrowOnchain,claimLink,claimRecorded,routed,settled,expired success;
-  class start,lock,validate,tx,recipient,directChain,escrowDeposit,recipientClaim,claimScan,railQueue,railWorker,railDeadLetter,settleWait,scanner pending;
+  class start,lock,validate,tx,recipient,directChain,escrowDeposit,recipientClaim,claimScan,railQueue,railWorker,railDeadLetter,reviewOps,settleWait,scanner pending;
   class retry,review warning;
   class requestFail,failed failure;
 ```
@@ -539,6 +544,7 @@ Implemented guardrails:
 - Rail payouts for direct sends and escrow claims go through the `rail_disburse` queue, with inline fallback only when Redis queues are disabled for local/demo runs.
 - Rail payout jobs carry stable provider idempotency keys; MoMo, Paystack, Wave, and M-Pesa receive the same key on retry instead of a fresh payout identity.
 - Rail final failures are visible through `GET /api/ops/rail/dead-letter`, and operators can retry with `POST /api/ops/rail/dead-letter/:transactionId/retry` using `X-Operations-Token`.
+- Non-rail review actions are exposed through `POST /api/ops/review/:transactionId/resend-claim-link`, `POST /api/ops/review/:transactionId/reconcile-chain-hash`, and `POST /api/ops/review/:transactionId/refund-escrow`.
 - Escrow claim-link notifications use the notification queue and can move a transaction to `requires_review` after final delivery failure.
 - Escrow claims use a tokenized escrow-ref lock to serialize duplicate taps, then replay the claimed state for the same recipient after the first claim succeeds.
 - Claim retries and `escrow.worker` reconciliation both retry local claim persistence and rail handoff for `escrow_claim_db_update` review records after an on-chain claim has already succeeded.
@@ -553,6 +559,7 @@ Main tradeoffs:
 - Returning after queue handoff improves request reliability, but users may see an `onchain` state while rail payout finishes asynchronously.
 - Provider idempotency semantics still vary by rail; sandbox checks and provider-specific tests are needed before treating duplicate prevention as complete.
 - The dead-letter surface is an API, not a full dashboard; production needs alerts and an operator runbook.
+- Chain-hash reconciliation is an operator assertion with receipt-success verification; automated event scanners are still needed for full recovery.
 - Claim reconciliation depends on the backend recording review metadata after the chain claim; a full DB outage at that instant still needs chain-event reconciliation or operator lookup.
 - Inline queue fallback keeps local development usable without Redis, but it is not durable and should not be treated as production resilience.
 
