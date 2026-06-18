@@ -12,8 +12,13 @@ import { eq } from "drizzle-orm";
 import { recordSettlementStep } from "../services/settlement";
 import { pollRailStatus } from "../services/rails";
 import type { Rail } from "@tuma/shared";
+import {
+  recordHeartbeat,
+  startHeartbeatLoop,
+} from "../services/worker-heartbeat";
 
 const MAX_POLL_ATTEMPTS = 20;
+const stopHeartbeat = startHeartbeatLoop("settlement.worker");
 
 const worker = new Worker<SettlementPollJob>(
   QUEUE_NAMES.SETTLEMENT_POLL,
@@ -79,14 +84,27 @@ const worker = new Worker<SettlementPollJob>(
 worker.on("failed", (job, err) => {
   if (err.message !== "PENDING") {
     console.error(`[SettlementWorker] Job ${job?.id} failed permanently:`, err.message);
+    void recordHeartbeat({
+      component: "settlement.worker",
+      kind: "worker",
+      status: "error",
+      error: err.message,
+      metadata: { jobId: job?.id },
+    });
   }
 });
 
 worker.on("ready", () => {
   console.log("[SettlementWorker] Ready — polling settlement statuses");
+  void recordHeartbeat({
+    component: "settlement.worker",
+    kind: "worker",
+    metadata: { state: "ready" },
+  });
 });
 
 process.on("SIGTERM", async () => {
+  stopHeartbeat();
   await worker.close();
   process.exit(0);
 });

@@ -76,10 +76,18 @@ This matrix tracks the current resilience posture for the send and escrow flows.
 | Rail webhook | Timeout webhook arrives | Logged and treated as pending. | Implemented | Needs poller or later webhook to resolve. | Ensure M-Pesa timeout path has a reconciliation strategy. |
 | Settlement poll | Non-M-Pesa rail remains pending | Settlement worker polls and retries. | Implemented | Long-lived pending state can still happen. | Add max-age review transition and alerts. |
 
+## Worker And Scanner Liveness
+
+| Stage | Failure scenario | Current handling | Status | Tradeoff / residual risk | Next hardening |
+| --- | --- | --- | --- | --- | --- |
+| Worker liveness | Settlement, rail, notification, or escrow worker stops | Workers write rows to `worker_heartbeats`; `GET /api/ops/health/heartbeats` reports missing/stale/error components and can return `503` with `failOnStale=true`. | Implemented | The endpoint is an alert signal, not a pager by itself. | Wire an external monitor or Render alert to poll with `failOnStale=true`. |
+| Scanner liveness | Expiry, claim-reconciliation, or chain-event scanner stops running | Each scanner writes success/failure heartbeats with result metadata after every scan loop. | Implemented | A database outage can prevent heartbeat writes and make the monitor report stale rather than the exact root cause. | Add dashboard panels and log/metric correlation. |
+| Scanner failure | Scanner catches an exception but worker process remains alive | Scanner heartbeat status becomes `error` with the latest error message until the next successful scan. | Implemented | A later success clears the active error; detailed history remains in logs, not in heartbeat rows. | Add historical heartbeat events or metrics if needed. |
+
 ## Current Priority Order
 
-1. Add scanner/worker heartbeat alerting.
-2. Add integration tests around duplicate sends, duplicate claims, rail idempotency, dead-letter retry, queue failure, operator recovery actions, chain-event repair, expiry scanner repair, and escrow claim failure paths.
+1. Add integration tests around duplicate sends, duplicate claims, rail idempotency, dead-letter retry, queue failure, operator recovery actions, chain-event repair, expiry scanner repair, and escrow claim failure paths.
+2. Wire an external monitor or Render alert to poll the heartbeat endpoint.
 3. Add a direct-transfer matcher or DB outbox for direct sends whose tx hash was never stored.
 4. Add an operator dashboard over the existing dead-letter/review APIs.
 5. Add provider-specific duplicate-behavior sandbox tests.

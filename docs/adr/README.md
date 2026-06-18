@@ -16,6 +16,7 @@ Current ADRs:
 | [0002](0002-review-state-for-unclear-money-movement.md) | Use `requires_review` for unclear outcomes after money movement | Accepted |
 | [0003](0003-retryable-rail-disbursement-worker.md) | Move rail payouts behind a retryable worker | Accepted |
 | [0004](0004-escrow-claim-notification-and-expiry-boundaries.md) | Treat escrow notification, claim, and expiry as separate recoverable steps | Accepted |
+| [0005](0005-worker-and-scanner-heartbeats.md) | Record worker and scanner liveness for operational alerting | Accepted |
 
 Related operational doc:
 

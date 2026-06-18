@@ -14,6 +14,12 @@ import {
   processRailDisbursement,
   railJobWithProviderIdempotency,
 } from "../services/rail-disbursement";
+import {
+  recordHeartbeat,
+  startHeartbeatLoop,
+} from "../services/worker-heartbeat";
+
+const stopHeartbeat = startHeartbeatLoop("rail.worker");
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -76,13 +82,26 @@ const worker = new Worker<RailDisburseJob>(
 
 worker.on("ready", () => {
   console.log("[RailWorker] Ready — consuming rail disbursements");
+  void recordHeartbeat({
+    component: "rail.worker",
+    kind: "worker",
+    metadata: { state: "ready" },
+  });
 });
 
 worker.on("failed", (job, err) => {
   console.error(`[RailWorker] Job ${job?.id} failed:`, err.message);
+  void recordHeartbeat({
+    component: "rail.worker",
+    kind: "worker",
+    status: "error",
+    error: err.message,
+    metadata: { jobId: job?.id },
+  });
 });
 
 process.on("SIGTERM", async () => {
+  stopHeartbeat();
   await worker.close();
   process.exit(0);
 });

@@ -195,6 +195,30 @@ export const chainScanCursors = pgTable("chain_scan_cursors", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ── Worker Heartbeats ────────────────────────────────────────────────────────
+
+export const workerHeartbeats = pgTable(
+  "worker_heartbeats",
+  {
+    component: text("component").primaryKey(),
+    kind: text("kind").notNull(),
+    status: text("status").default("ok").notNull(),
+    staleAfterSeconds: integer("stale_after_seconds").notNull(),
+    lastHeartbeatAt: timestamp("last_heartbeat_at").notNull(),
+    lastStartedAt: timestamp("last_started_at"),
+    lastSuccessAt: timestamp("last_success_at"),
+    lastFailureAt: timestamp("last_failure_at"),
+    lastError: text("last_error"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("worker_heartbeats_status_idx").on(t.status),
+    index("worker_heartbeats_last_heartbeat_idx").on(t.lastHeartbeatAt),
+  ]
+);
+
 // ── Escrow Payments ───────────────────────────────────────────────────────────
 
 export const escrowPayments = pgTable(

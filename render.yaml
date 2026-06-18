@@ -75,6 +75,12 @@ services:
       # ── Operations API (set manually; protects /api/ops/*) ────────────────
       - key: OPERATIONS_API_TOKEN
         sync: false
+      - key: WORKER_HEARTBEAT_INTERVAL_MS
+        value: "30000"
+      - key: WORKER_HEARTBEAT_STALE_SECONDS
+        value: "120"
+      - key: SCANNER_HEARTBEAT_STALE_SECONDS
+        value: "900"
 
       # ── Wallet derivation (set manually — NEVER rotate after first deploy) ─
       - key: WALLET_DERIVE_SECRET
@@ -192,6 +198,12 @@ services:
           type: redis
           name: autopayke-redis
           property: connectionString
+      - key: WORKER_HEARTBEAT_INTERVAL_MS
+        value: "30000"
+      - key: WORKER_HEARTBEAT_STALE_SECONDS
+        value: "120"
+      - key: SCANNER_HEARTBEAT_STALE_SECONDS
+        value: "900"
       - key: WALLET_DERIVE_SECRET
         sync: false
       - key: PAYSTACK_SECRET_KEY

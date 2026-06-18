@@ -14,6 +14,12 @@ import {
   sendReceivedNotification,
 } from "../services/whatsapp";
 import { recordSettlementStep } from "../services/settlement";
+import {
+  recordHeartbeat,
+  startHeartbeatLoop,
+} from "../services/worker-heartbeat";
+
+const stopHeartbeat = startHeartbeatLoop("notify.worker");
 
 const worker = new Worker<WhatsAppNotifyJob>(
   QUEUE_NAMES.WHATSAPP_NOTIFY,
@@ -51,6 +57,11 @@ const worker = new Worker<WhatsAppNotifyJob>(
 
 worker.on("ready", () => {
   console.log("[NotifyWorker] Ready — consuming WhatsApp notification queue");
+  void recordHeartbeat({
+    component: "notify.worker",
+    kind: "worker",
+    metadata: { state: "ready" },
+  });
 });
 
 worker.on("completed", (job) => {
@@ -59,6 +70,17 @@ worker.on("completed", (job) => {
 
 worker.on("failed", async (job, err) => {
   console.error(`[NotifyWorker] ✗ Job ${job?.id} failed:`, err.message);
+  await recordHeartbeat({
+    component: "notify.worker",
+    kind: "worker",
+    status: "error",
+    error: err.message,
+    metadata: {
+      jobId: job?.id,
+      templateName: job?.data.templateName,
+      transactionId: job?.data.transactionId,
+    },
+  });
 
   const attempts = job?.opts.attempts ?? 1;
   if (
@@ -73,6 +95,7 @@ worker.on("failed", async (job, err) => {
 });
 
 process.on("SIGTERM", async () => {
+  stopHeartbeat();
   await worker.close();
   process.exit(0);
 });

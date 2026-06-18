@@ -11,6 +11,7 @@ import {
   resendClaimLink,
   retryEscrowRefund,
 } from "../services/review-recovery";
+import { listHeartbeatStatus } from "../services/worker-heartbeat";
 
 export const opsRouter = new Hono();
 opsRouter.use("*", opsAuthMiddleware);
@@ -30,9 +31,33 @@ const ChainHashBodySchema = z.object({
   note: z.string().max(500).optional(),
 });
 
+const BooleanQuery = z.preprocess(
+  (value) => value === true || value === "true" || value === "1",
+  z.boolean()
+);
+
+const HeartbeatQuerySchema = z.object({
+  staleOnly: BooleanQuery,
+  failOnStale: BooleanQuery,
+});
+
 function operator(c: Context): string {
   return c.req.header("x-operator") ?? "ops-token";
 }
+
+// GET /api/ops/health/heartbeats
+opsRouter.get(
+  "/health/heartbeats",
+  zValidator("query", HeartbeatQuerySchema),
+  async (c) => {
+    const { staleOnly, failOnStale } = c.req.valid("query");
+    const data = await listHeartbeatStatus(staleOnly);
+    const status = (failOnStale && data.staleCount > 0 ? 503 : 200) as
+      | 200
+      | 503;
+    return c.json({ ok: data.staleCount === 0, data }, status);
+  }
+);
 
 // GET /api/ops/rail/dead-letter
 opsRouter.get(

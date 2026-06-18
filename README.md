@@ -557,6 +557,7 @@ Implemented guardrails:
 - Claim retries and `escrow.worker` reconciliation both retry local claim persistence and rail handoff for `escrow_claim_db_update` review records after an on-chain claim has already succeeded.
 - Escrow expiry uses deterministic delayed jobs plus a periodic scanner in `escrow.worker`, so expired pending escrows are re-enqueued or refunded even if the original delayed job was missed.
 - `escrow.worker` also scans `TumaEscrow` `Deposited`, `Claimed`, and `Refunded` events using the persistent `chain_scan_cursors` table, repairing escrow deposits, claims, and refunds that succeeded on-chain before local review metadata could be written.
+- Workers and scanners write liveness rows to `worker_heartbeats`; operators can query `GET /api/ops/health/heartbeats` and use `failOnStale=true` for external monitors.
 - History and tracking APIs expose review metadata so the frontend can stop polling and show "Needs review" rather than spinning forever.
 
 Design decisions and tradeoffs are documented in [docs/adr/](docs/adr/). The current send/escrow failure matrix is in [docs/send-escrow-failure-scenarios.md](docs/send-escrow-failure-scenarios.md).
@@ -567,6 +568,7 @@ Main tradeoffs:
 - Returning after queue handoff improves request reliability, but users may see an `onchain` state while rail payout finishes asynchronously.
 - Provider idempotency semantics still vary by rail; sandbox checks and provider-specific tests are needed before treating duplicate prevention as complete.
 - The dead-letter surface is an API, not a full dashboard; production needs alerts and an operator runbook.
+- Heartbeat alerting is an API-level signal; Render, UptimeRobot, PagerDuty, or another monitor still needs to poll it and page humans.
 - Chain-hash reconciliation is an operator assertion with receipt-success verification; broader direct-transfer event matching is still needed for full recovery.
 - Chain-event scanning is deterministic for escrow contract events with a known `claimRef`; direct ERC-20 sends without a stored hash still need a direct-transfer matcher, outbox, or operator lookup.
 - Inline queue fallback keeps local development usable without Redis, but it is not durable and should not be treated as production resilience.
