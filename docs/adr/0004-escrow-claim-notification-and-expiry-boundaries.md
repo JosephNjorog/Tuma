@@ -28,7 +28,10 @@ Current behavior:
 - Persist the escrow reference and on-chain transaction hash as soon as possible.
 - Queue the claim-link notification. If queueing is unavailable, send directly as a local fallback.
 - If claim-link delivery fails after funds are escrowed, mark the transaction `requires_review` instead of reporting the transfer as failed.
-- On claim, persist `claimTxHash`, attach the recipient wallet, record the on-chain claim, then queue the rail payout through the shared rail-disbursement path.
+- On claim, acquire a short escrow-ref lock before signing and broadcasting the claim transaction.
+- After the on-chain claim succeeds, persist `claimTxHash`, attach the recipient wallet, record the on-chain claim, then queue the rail payout through the shared rail-disbursement path.
+- If the post-chain claim database update fails, record `escrow_claim_db_update` review metadata containing the claim hash and recipient context.
+- Recipient retries and a periodic claim reconciliation scan in `escrow.worker` can both retry local claim persistence and rail handoff for `escrow_claim_db_update` transactions, guarded by a short transaction-scoped reconciliation lock.
 - Schedule an escrow-expiry job for refund after the claim window, using a deterministic job id and retry backoff.
 - Run a periodic expiry scanner in `escrow.worker` to find expired pending escrows whose delayed jobs were missed or lost, then re-enqueue or process them inline when queues are unavailable.
 - Mark refund failures as `requires_review` after the final queue retry.
@@ -41,6 +44,8 @@ Positive:
 - A claimed escrow and a rail payout failure are distinguishable states.
 - The claim path reuses the same retry and review semantics as direct sends.
 - Persisting `claimTxHash` gives reconciliation a concrete on-chain anchor.
+- Duplicate claim taps are serialized by the claim lock and replay the claimed state for the same recipient.
+- A successful chain claim followed by a local database failure can be retried without asking the recipient to claim again.
 - Expired pending escrows no longer rely only on a single delayed queue job.
 
 Tradeoffs:
@@ -48,9 +53,11 @@ Tradeoffs:
 - A user can see a successful escrow deposit while the recipient has not received the claim link yet.
 - If claim-link delivery fails, operators need a resend or manual contact workflow.
 - Marking escrow claimed before rail payout prevents double claim, but means payout failure must be resolved operationally.
+- The claim lock is TTL-based and best-effort; the smart contract remains the final source of truth for duplicate-claim rejection.
+- The reconciliation lock is also TTL-based; provider-level rail idempotency is still needed as a final guard against duplicate payout submissions.
+- Claim reconciliation currently depends on the backend writing the `escrow_claim_db_update` review event. If PostgreSQL is fully unavailable immediately after the chain claim, operators still need chain lookup, and a chain-event scanner remains future hardening.
 - Expiry recovery now depends on the `escrow.worker` scanner being alive and able to reach PostgreSQL.
 - Deterministic expiry job ids reduce duplicate queue buildup, but operational monitoring is still needed.
-- Some post-on-chain claim failure paths still need stronger reconciliation around DB update failures.
 
 ## Alternatives Considered
 
@@ -65,5 +72,5 @@ Tradeoffs:
 - Add scanner heartbeat/alerting so a stopped expiry worker is visible.
 - Add an operator action to resend claim links.
 - Add an operator action to retry or manually resolve failed escrow refunds.
-- Add claim reconciliation for cases where on-chain claim succeeds but DB updates fail.
-- Add idempotency or locking around claim submission to protect against duplicate taps and retry races.
+- Add chain-event scanner coverage for claims that succeeded before review metadata could be written.
+- Add duplicate-tap and post-chain claim reconciliation tests.

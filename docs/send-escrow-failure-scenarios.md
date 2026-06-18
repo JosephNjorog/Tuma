@@ -52,10 +52,10 @@ This matrix tracks the current resilience posture for the send and escrow flows.
 | Claim validation | Wrong phone, expired link, already claimed/refunded | Request fails before money movement. | Implemented | User may need clearer support path for expired/refunded claims. | Improve frontend claim-state copy. |
 | Claim signing | Recipient wallet missing | Request fails before on-chain claim. | Implemented | Recipient must retry after wallet deployment. | Add frontend retry/backoff while wallet is deploying. |
 | On-chain claim | Claim succeeds | Escrow row stores `claimTxHash`, claiming wallet, and claim timestamp. Transaction records on-chain claim event. | Implemented | None significant in happy path. | Add tests. |
-| On-chain claim | Claim succeeds but DB update fails | Not fully protected by stage-aware review handling yet. | Gap | Chain state may say claimed while DB still says pending. | Add claim reconciliation and a post-claim stage wrapper. |
+| On-chain claim | Claim succeeds but DB update fails | The claim route records `escrow_claim_db_update` review metadata with the claim hash and recipient context; recipient retries and `escrow.worker` both replay local claim persistence and rail handoff from that metadata behind a transaction-scoped reconciliation lock. | Implemented | Recovery depends on recording the review event; a full DB outage immediately after the chain claim still needs chain-event/operator reconciliation. | Add chain-event scanner for claims that succeeded before any review metadata could be written. |
 | Rail payout after claim | Rail queue unavailable in local/demo mode | Claim path falls back to inline rail payout. | Implemented | Inline fallback is not durable. | Use DB outbox or require Redis in production. |
 | Rail payout after claim | Rail submission fails after retries | Transaction becomes `requires_review` with claim metadata. | Implemented | Recipient has claimed on-chain but still needs fiat/mobile-money payout resolution. | Add operator retry/refund decision flow. |
-| Duplicate claim tap | Recipient submits claim twice quickly | Escrow status checks reduce risk after DB update. | Partial | Race exists before DB update commits; on-chain contract should reject duplicate claim, but UX may be rough. | Add claim idempotency lock by escrow ref and user. |
+| Duplicate claim tap | Recipient submits claim twice quickly | Claim submission uses a short escrow-ref lock; once claimed, the same recipient gets an idempotent replay response instead of a second chain attempt. | Implemented | The lock is best-effort and TTL-based, so the on-chain contract remains the final duplicate-claim guard. | Add duplicate-tap and lock-expiry tests. |
 
 ## Expiry And Refund
 
@@ -77,8 +77,8 @@ This matrix tracks the current resilience posture for the send and escrow flows.
 
 ## Current Priority Order
 
-1. Add claim post-on-chain reconciliation and claim idempotency lock.
-2. Add provider-level rail idempotency keys and dead-letter visibility.
-3. Add operator tools for `requires_review`: resend claim link, retry rail payout, reconcile chain hash, refund escrow.
+1. Add provider-level rail idempotency keys and dead-letter visibility.
+2. Add operator tools for `requires_review`: resend claim link, retry rail payout, reconcile chain hash, refund escrow.
+3. Add chain-event scanners for post-chain cases where the DB was unavailable before review metadata could be written.
 4. Add scanner/worker heartbeat alerting.
-5. Add integration tests around duplicate sends, queue failure, final retry review, expiry scanner repair, and escrow claim failure paths.
+5. Add integration tests around duplicate sends, duplicate claims, queue failure, final retry review, expiry scanner repair, and escrow claim failure paths.
