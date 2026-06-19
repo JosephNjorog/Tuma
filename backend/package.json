@@ -11,6 +11,7 @@
     "worker:rail": "bun run src/workers/rail.worker.ts",
     "worker:notify": "bun run src/workers/notify.worker.ts",
     "worker:all": "bun run src/workers/all.worker.ts",
+    "monitor:heartbeats": "bun run src/scripts/check-heartbeats.ts",
     "db:push": "drizzle-kit push --force",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
