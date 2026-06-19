@@ -91,6 +91,10 @@ export const notifyQueue = queueOpts
 
 // ── Scheduling helpers ────────────────────────────────────────────────────────
 
+export function escrowExpiryJobId(escrowRef: string): string {
+  return `escrow-expire-${escrowRef.replaceAll(":", "_")}`;
+}
+
 export async function scheduleSettlementPoll(
   transactionId: string,
   rail: string,
@@ -113,7 +117,7 @@ export async function scheduleEscrowExpiry(
   if (!escrowQueue) return false;
   const delay = expiresAt.getTime() - Date.now();
   await escrowQueue.add("expire", job, {
-    jobId: `escrow-expire:${job.escrowRef}`,
+    jobId: escrowExpiryJobId(job.escrowRef),
     delay: Math.max(delay, 0),
     attempts: 5,
     backoff: { type: "exponential", delay: 60_000 },

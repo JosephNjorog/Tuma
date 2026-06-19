@@ -594,7 +594,7 @@ Implemented guardrails:
 - Escrow expiry uses deterministic delayed jobs plus a periodic scanner in `escrow.worker`, so expired pending escrows are re-enqueued or refunded even if the original delayed job was missed.
 - `escrow.worker` also scans `TumaEscrow` `Deposited`, `Claimed`, and `Refunded` events using the persistent `chain_scan_cursors` table, repairing escrow deposits, claims, and refunds that succeeded on-chain before local review metadata could be written.
 - Workers and scanners write liveness rows to `worker_heartbeats`; operators can query `GET /api/ops/health/heartbeats` and use `failOnStale=true` for external monitors.
-- Backend resilience tests now include unit coverage for provider idempotency, heartbeat status, and escrow chain-event helpers, plus Postgres/Redis integration coverage for heartbeat health and rail dead-letter retry paths.
+- Backend resilience tests now include unit coverage for provider idempotency, heartbeat status, and escrow chain-event helpers, plus Postgres/Redis integration coverage for duplicate send/claim idempotency, expiry scanner repair, claim DB reconciliation, escrow chain-event repairs, rail dead-letter retry, operator recovery routes, and heartbeat health.
 - History and tracking APIs expose review metadata so the frontend can stop polling and show "Needs review" rather than spinning forever.
 
 Design decisions and tradeoffs are documented in [docs/adr/](docs/adr/). The current send/escrow failure matrix is in [docs/send-escrow-failure-scenarios.md](docs/send-escrow-failure-scenarios.md).

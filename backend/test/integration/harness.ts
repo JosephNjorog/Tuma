@@ -1,8 +1,10 @@
 import { afterAll, beforeEach } from "bun:test";
 import { sql } from "drizzle-orm";
 import IORedis from "ioredis";
-import app from "../../src/app";
 import { db } from "../../src/db";
+import { users } from "../../src/db/schema";
+import { signAccessToken } from "../../src/lib/auth";
+import { hashPhone } from "../../src/lib/crypto";
 
 const REQUIRED_ENV = [
   "DATABASE_URL",
@@ -15,6 +17,7 @@ const REQUIRED_ENV = [
 
 let redis: IORedis | null = null;
 let redisReady: Promise<void> | null = null;
+let appPromise: Promise<typeof import("../../src/app").default> | null = null;
 
 export function requireIntegrationEnv(): void {
   const missing = REQUIRED_ENV.filter((name) => !process.env[name]);
@@ -118,6 +121,59 @@ export function opsHeaders(
   };
 }
 
-export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+async function appInstance() {
+  appPromise ??= import("../../src/app").then((module) => module.default);
+  return appPromise;
+}
+
+export type IntegrationUser = typeof users.$inferSelect;
+
+export async function createIntegrationUser({
+  phone,
+  countryCode = "KE",
+  walletAddress = null,
+  isMerchant = false,
+}: {
+  phone: string;
+  countryCode?: string;
+  walletAddress?: string | null;
+  isMerchant?: boolean;
+}): Promise<IntegrationUser> {
+  const [user] = await db
+    .insert(users)
+    .values({
+      phone,
+      phoneHash: hashPhone(phone),
+      countryCode,
+      walletAddress,
+      isMerchant,
+    })
+    .returning();
+
+  return user;
+}
+
+export async function authHeadersFor(
+  user: IntegrationUser,
+  extra: Record<string, string> = {}
+): Promise<Record<string, string>> {
+  const token = await signAccessToken({
+    sub: user.id,
+    phone: user.phone,
+    walletAddress: user.walletAddress,
+    isMerchant: user.isMerchant,
+  });
+
+  return {
+    Authorization: `Bearer ${token}`,
+    ...extra,
+  };
+}
+
+export async function apiFetch(
+  path: string,
+  init?: RequestInit
+): Promise<Response> {
+  const app = await appInstance();
   return app.fetch(new Request(`http://localhost${path}`, init));
 }
