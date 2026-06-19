@@ -26,10 +26,16 @@ Use a layered test gate:
 - GitHub Actions runs backend typecheck, backend unit tests, backend integration tests with Postgres/Redis services, frontend production build, and contract build/tests with Foundry.
 - Integration tests reset app tables and Redis before each spec so each failure scenario starts from known state.
 
-The first resilience integration clusters cover:
+The resilience integration clusters now cover:
 
 - ops heartbeat visibility, stale/missing behavior, and `failOnStale=true`
 - rail dead-letter list and retry, including provider idempotency key preservation through Redis queue handoff
+- duplicate `/api/send` replay and in-flight send lock conflicts
+- duplicate escrow claim replay and in-flight claim lock conflicts
+- expiry scanner repair for missed delayed jobs, including refund-review marking when the sender wallet is missing
+- claim DB-reconciliation replay from `escrow_claim_db_update` review metadata
+- escrow contract `Deposited`, `Claimed`, and `Refunded` event scanner repairs
+- non-rail operator recovery routes for claim-link resend, chain-hash reconciliation, and unsafe refund retry rejection
 
 ## Tradeoffs
 
@@ -48,7 +54,7 @@ The first resilience integration clusters cover:
 
 ## Pending Gaps
 
-- Add duplicate send, duplicate claim, claim DB-reconciliation, expiry scanner, chain-event repair, and escrow refund integration tests.
+- Add contract-backed or mock-injected success-path tests for operator refund retry and full on-chain claim/send flows.
 - Add provider sandbox tests for duplicate rail submissions.
 - Clean up frontend formatting/lint baseline, then turn frontend lint into a required CI gate.
 - Add external monitor configuration for `GET /api/ops/health/heartbeats?failOnStale=true`.
