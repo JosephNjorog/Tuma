@@ -257,6 +257,36 @@ services:
       - key: FX_SPREAD
         value: "0.023"
 
+  # ── Worker/scanner heartbeat monitor ───────────────────────────────────────
+  # Render HTTP health checks are intentionally left on /health: tying worker
+  # liveness to the web service health check would restart a healthy API when a
+  # separate worker is stale. This cron job calls the protected heartbeat
+  # endpoint instead and exits non-zero so Render can send failure notifications.
+  - type: cron
+    name: autopayke-heartbeat-monitor
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    dockerCommand: bun run monitor:heartbeats
+    schedule: "*/2 * * * *"
+    plan: starter
+    region: oregon
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_BASE_URL
+        fromService:
+          type: web
+          name: tumabackendservice
+          envVarKey: API_BASE_URL
+      - key: OPERATIONS_API_TOKEN
+        fromService:
+          type: web
+          name: tumabackendservice
+          envVarKey: OPERATIONS_API_TOKEN
+      - key: HEARTBEAT_MONITOR_TIMEOUT_MS
+        value: "30000"
+
   # ── Redis ────────────────────────────────────────────────────────────────────
   - type: redis
     name: autopayke-redis
