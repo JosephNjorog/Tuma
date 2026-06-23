@@ -220,6 +220,7 @@ function SendPage() {
 function PickRecipient({ accessToken, onPick }: { accessToken: string | null; onPick: (c: Contact) => void }) {
   const [q, setQ] = useState("");
   const [importing, setImporting] = useState(false);
+  const [debouncedPhone, setDebouncedPhone] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hasContactPicker = typeof navigator !== "undefined" && "contacts" in (navigator as any);
 
@@ -257,6 +258,27 @@ function PickRecipient({ accessToken, onPick }: { accessToken: string | null; on
     ?? countries.find((c) => typed.startsWith(c.dial.slice(1)))
     ?? countries[0];
 
+  // Debounce the phone input by 400 ms before firing the lookup query.
+  useEffect(() => {
+    if (!isPhone) { setDebouncedPhone(""); return; }
+    const t = setTimeout(() => {
+      const e164 = typed.startsWith("+") ? typed : `+${typed}`;
+      setDebouncedPhone(e164);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [typed, isPhone]);
+
+  const { data: lookupData, isFetching: lookupFetching } = useQuery({
+    queryKey: ["lookup", debouncedPhone],
+    queryFn: () => api.send.lookup(debouncedPhone, accessToken!),
+    enabled: !!debouncedPhone && !!accessToken,
+    staleTime: 60_000,
+  });
+
+  const isRegistered = lookupData?.registered;
+  // True while the debounce hasn't settled or the request is in-flight.
+  const lookupPending = (isPhone && debouncedPhone === "") || lookupFetching;
+
   async function importFromContacts() {
     if (!hasContactPicker) return;
     setImporting(true);
@@ -270,7 +292,14 @@ function PickRecipient({ accessToken, onPick }: { accessToken: string | null; on
         const name = first.name?.[0] ?? tel;
         if (tel.length >= 8) {
           const country = countries.find((c) => tel.startsWith(c.dial)) ?? countries[0];
-          onPick({ id: "device", name, msisdn: tel, country: country.name, flag: country.flag, rail: "MoMo" });
+          let registered: boolean | undefined;
+          try {
+            if (accessToken) {
+              const res = await api.send.lookup(tel, accessToken);
+              registered = res.registered;
+            }
+          } catch { /* non-fatal */ }
+          onPick({ id: "device", name, msisdn: tel, country: country.name, flag: country.flag, rail: "MoMo", registered });
         }
       }
     } catch {
@@ -322,17 +351,37 @@ function PickRecipient({ accessToken, onPick }: { accessToken: string | null; on
 
         {newContact && (
           <button
-            onClick={() => onPick({ id: "new", name: typed, msisdn: typed, country: cc.name, flag: cc.flag, rail: "MoMo" })}
-            className="mt-4 w-full flex items-center gap-3 rounded-2xl border border-dashed border-primary bg-primary-soft/50 p-4 text-left"
+            onClick={() => onPick({
+              id: "new", name: typed, msisdn: typed.startsWith("+") ? typed : `+${typed}`,
+              country: cc.name, flag: cc.flag, rail: "MoMo",
+              registered: lookupData?.registered,
+            })}
+            className={`mt-4 w-full flex items-center gap-3 rounded-2xl border p-4 text-left transition ${
+              isRegistered
+                ? "border-success/50 bg-success/5"
+                : "border-dashed border-primary bg-primary-soft/50"
+            }`}
           >
-            <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-              <UserPlus className="h-4 w-4" />
+            <div className={`h-10 w-10 rounded-full flex items-center justify-center text-primary-foreground ${
+              isRegistered ? "bg-success" : "bg-primary"
+            }`}>
+              {lookupPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : isRegistered
+                  ? <Check className="h-4 w-4" />
+                  : <UserPlus className="h-4 w-4" />}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold">Send to {typed} {cc.flag}</p>
-              <p className="text-[11px] text-muted-foreground">Not on Autopayke yet — we'll text them a claim link</p>
+              <p className="text-sm font-semibold">Send to {typed.startsWith("+") ? typed : `+${typed}`} {cc.flag}</p>
+              {lookupPending ? (
+                <p className="text-[11px] text-muted-foreground">Checking Autopayke…</p>
+              ) : isRegistered ? (
+                <p className="text-[11px] text-success font-medium">On Autopayke · instant settlement</p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">Not on Autopayke yet — we'll text them a claim link</p>
+              )}
             </div>
-            <ArrowRight className="h-4 w-4 text-primary" />
+            <ArrowRight className={`h-4 w-4 ${isRegistered ? "text-success" : "text-primary"}`} />
           </button>
         )}
       </div>
