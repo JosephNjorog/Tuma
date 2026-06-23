@@ -4,9 +4,13 @@ import { Eye, EyeOff, Copy, Send, QrCode, Plus, Store, ArrowUpRight, ArrowDownLe
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MobileFrame } from "@/components/MobileFrame";
 import { BottomNav } from "@/components/BottomNav";
+import { CurrencyToggle } from "@/components/CurrencyToggle";
 import { api, type WalletAsset, type TxSummary, type Notification } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useThemeStore } from "@/lib/theme-store";
+import { useCurrencyStore } from "@/lib/currency-store";
+import { useKesRate } from "@/hooks/use-kes-rate";
+import { formatMoney } from "@/lib/tuma-data";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useThemeStore();
@@ -144,6 +148,8 @@ function assetColor(symbol: string) {
 function Dashboard() {
   const navigate = useNavigate();
   const { accessToken, refreshToken, user, isLoggedIn, logout } = useAuthStore();
+  const { displayCurrency } = useCurrencyStore();
+  const kesRate = useKesRate();
   const [hide, setHide] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -221,9 +227,12 @@ function Dashboard() {
             <div className="absolute -left-5 -bottom-10 h-32 w-32 rounded-full bg-black/10 blur-2xl" />
             <div className="relative flex items-center justify-between">
               <p className="text-xs opacity-80 uppercase tracking-wider">Total balance</p>
-              <button onClick={() => setHide((h) => !h)} className="h-8 w-8 rounded-full bg-white/15 backdrop-blur flex items-center justify-center">
-                {hide ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+              <div className="flex items-center gap-2">
+                <CurrencyToggle />
+                <button onClick={() => setHide((h) => !h)} className="h-8 w-8 rounded-full bg-white/15 backdrop-blur flex items-center justify-center">
+                  {hide ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
             {walletLoading ? (
               <div className="mt-2 h-10 w-32 rounded-xl bg-white/20 animate-pulse" />
@@ -234,7 +243,7 @@ function Dashboard() {
               </div>
             ) : (
               <p className="relative mt-2 text-4xl font-black tracking-tight">
-                {hide ? "$••••••" : `$${totalUsd.toFixed(2)}`}
+                {hide ? "••••••" : formatMoney(totalUsd, displayCurrency, kesRate)}
               </p>
             )}
             <div className="relative mt-4 flex items-center gap-3">
@@ -267,7 +276,7 @@ function Dashboard() {
                   <div className={`h-7 w-7 rounded-full ${assetColor(a.symbol)} flex items-center justify-center text-[10px] font-bold text-white`}>{a.symbol[0]}</div>
                   <p className="mt-2 text-[10px] text-muted-foreground">{a.symbol}</p>
                   <p className="text-sm font-bold leading-tight">{parseFloat(a.balance).toFixed(2)}</p>
-                  <p className="text-[10px] text-muted-foreground">${a.balanceUsd.toFixed(2)}</p>
+                  <p className="text-[10px] text-muted-foreground">{formatMoney(a.balanceUsd, displayCurrency, kesRate)}</p>
                 </div>
               ))}
             </div>
