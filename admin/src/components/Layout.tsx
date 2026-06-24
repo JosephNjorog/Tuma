@@ -50,10 +50,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
           <div className="h-7 w-7 rounded-md bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground text-xs font-bold">T</span>
+            <span className="text-primary-foreground text-xs font-bold">A</span>
           </div>
           <div>
-            <p className="text-sm font-semibold">Tuma Ops</p>
+            <p className="text-sm font-semibold">Autopayke Ops</p>
             <p className="text-[10px] text-muted-foreground">{operator}</p>
           </div>
         </div>
@@ -76,7 +76,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
               >
-                <Icon className="h-4 w-4 flex-shrink-0" />
+                <Icon className="h-4 w-4 shrink-0" />
                 {label}
                 {active && <ChevronRight className="ml-auto h-3 w-3 opacity-50" />}
               </Link>

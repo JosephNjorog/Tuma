@@ -60,9 +60,9 @@ function LoginPage() {
         {/* Logo */}
         <div className="mb-8 text-center">
           <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center mx-auto mb-3">
-            <span className="text-primary-foreground text-xl font-bold">T</span>
+            <span className="text-primary-foreground text-xl font-bold">A</span>
           </div>
-          <h1 className="text-2xl font-bold">Tuma Ops</h1>
+          <h1 className="text-2xl font-bold">Autopayke Ops</h1>
           <p className="text-sm text-muted-foreground mt-1">Admin Dashboard</p>
         </div>
 
