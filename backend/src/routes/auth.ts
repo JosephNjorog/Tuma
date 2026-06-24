@@ -180,6 +180,7 @@ authRouter.post("/verify-otp", otpVerifyLimiter, zValidator("json", VerifyOtpSch
       user: {
         id: user.id,
         phone: user.phone,
+        email: user.email ?? null,
         walletAddress: user.walletAddress,
         isMerchant: user.isMerchant,
       },
@@ -283,6 +284,7 @@ authRouter.post("/login", loginLimiter, zValidator("json", LoginSchema), async (
       user: {
         id: user.id,
         phone: user.phone,
+        email: user.email ?? null,
         walletAddress: user.walletAddress,
         isMerchant: user.isMerchant,
       },
