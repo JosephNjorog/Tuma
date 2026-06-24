@@ -22,6 +22,13 @@
       "when": 1781789712315,
       "tag": "0002_boring_risque",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1750773600000,
+      "tag": "0003_admin_user_suspend",
+      "breakpoints": true
     }
   ]
 }
