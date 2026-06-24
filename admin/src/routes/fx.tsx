@@ -12,7 +12,7 @@ import {
   Legend,
 } from "recharts";
 import { opsApi, type FxRate } from "@/lib/api";
-import { fmt, fmtDate, timeAgo } from "@/lib/utils";
+import { fmt, timeAgo, cn } from "@/lib/utils";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,38 +30,41 @@ function RateCard({ rate }: { rate: FxRate }) {
   const spreadPct = (rate.spread * 100).toFixed(2);
 
   return (
-    <Card className={isOverride ? "border-orange-400" : ""}>
-      <CardHeader className="pb-2">
+    <Card className={cn("relative overflow-hidden", isOverride ? "border-orange-400" : "")}>
+      {isOverride && (
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-orange-400" />
+      )}
+      <CardHeader className="pb-1 pt-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-bold">{rate.currency}</CardTitle>
+          <div>
+            <p className="text-xs text-muted-foreground mb-0.5">USD →</p>
+            <CardTitle className="text-2xl font-bold tracking-tight">{rate.currency}</CardTitle>
+          </div>
           {isOverride && (
-            <span className="flex items-center gap-1 text-xs text-orange-600">
+            <span className="flex items-center gap-1 text-xs text-orange-600 bg-orange-50 dark:bg-orange-900/20 px-2 py-0.5 rounded-full">
               <AlertTriangle className="h-3 w-3" />
               Override
             </span>
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-2">
-        <div className="grid grid-cols-2 gap-2 text-sm">
+      <CardContent className="space-y-3">
+        <div className="flex justify-between items-end">
           <div>
+            <p className="text-xs text-muted-foreground">AP Rate</p>
+            <p className="text-lg font-semibold tabular-nums">{fmt(rate.tumaRate, 2)}</p>
+          </div>
+          <div className="text-right">
             <p className="text-xs text-muted-foreground">Mid Rate</p>
-            <p className="font-medium">{fmt(rate.midRate, 4)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Tuma Rate</p>
-            <p className="font-medium">{fmt(rate.tumaRate, 4)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Spread</p>
-            <p className="font-medium">{spreadPct}%</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Source</p>
-            <p className="font-medium text-xs truncate">{rate.source}</p>
+            <p className="text-sm font-medium tabular-nums text-muted-foreground">{fmt(rate.midRate, 2)}</p>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">Updated {timeAgo(rate.fetchedAt)}</p>
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">
+            Spread: <span className="font-medium text-foreground">{spreadPct}%</span>
+          </span>
+          <span className="text-muted-foreground">{timeAgo(rate.fetchedAt)}</span>
+        </div>
       </CardContent>
     </Card>
   );
@@ -128,7 +131,7 @@ export default function FxPage() {
         ) : ratesError ? (
           <ErrorDisplay error={ratesError as Error} />
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
             {ratesData?.rates.map((rate) => <RateCard key={rate.currency} rate={rate} />)}
           </div>
         )}
@@ -187,7 +190,7 @@ export default function FxPage() {
                   <Line
                     type="monotone"
                     dataKey="tuma"
-                    name="Tuma Rate"
+                    name="AP Rate"
                     stroke="#ec4899"
                     dot={false}
                     strokeWidth={2}
@@ -208,8 +211,8 @@ export default function FxPage() {
             <DialogTitle>Emergency Rate Override</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-orange-600 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            This will immediately update the Tuma rate used for new quotes.
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            This will immediately update the AutoPayKe rate used for new quotes.
           </p>
           <div className="space-y-3">
             <div>
@@ -224,7 +227,7 @@ export default function FxPage() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">New Tuma Rate (USD → {overrideCurrency})</label>
+              <label className="text-sm font-medium">New AP Rate (USD → {overrideCurrency})</label>
               <Input
                 type="number"
                 placeholder="e.g. 128.50"
