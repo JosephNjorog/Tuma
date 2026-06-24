@@ -42,7 +42,9 @@ export async function processRailDisbursement(
       railReference: result.railReference,
       note: "Rail reported immediate settlement",
     });
-  } else if (result.rail !== "mpesa") {
+  } else {
+    // All rails now disburse via Paystack — poll for settlement on all of them.
+    // Paystack webhooks (transfer.success) are the primary signal; polling is the backstop.
     await scheduleSettlementPoll(
       idempotentJob.transactionId,
       result.rail,
