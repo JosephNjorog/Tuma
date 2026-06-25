@@ -6,7 +6,6 @@ import {
   Plus,
   ArrowUpRight,
   QrCode,
-  Store,
   Activity,
   AlertCircle,
   ShieldAlert,
@@ -187,7 +186,6 @@ function Dashboard() {
           onAddMoney={() => navigate({ to: "/fund" })}
           onSend={() => navigate({ to: "/send" })}
           onReceive={() => navigate({ to: "/receive" })}
-          onMerchant={() => navigate({ to: "/merchant" })}
         />
 
         {/* Recent Activity */}
@@ -292,53 +290,29 @@ const AssetsSection = memo(function AssetsSection({
 // ── Quick Actions ─────────────────────────────────────────────────────────────
 
 const QUICK_ACTIONS = [
-  {
-    label: "Add money",
-    icon: Plus,
-    isOrange: true,
-    key: "add",
-  },
-  {
-    label: "Send",
-    icon: ArrowUpRight,
-    isOrange: false,
-    key: "send",
-  },
-  {
-    label: "Receive",
-    icon: QrCode,
-    isOrange: false,
-    key: "receive",
-  },
-  {
-    label: "Merchant",
-    icon: Store,
-    isOrange: false,
-    key: "merchant",
-  },
+  { label: "Add money", icon: Plus,         isOrange: true,  key: "add"     },
+  { label: "Send",      icon: ArrowUpRight, isOrange: false, key: "send"    },
+  { label: "Receive",   icon: QrCode,       isOrange: false, key: "receive" },
 ] as const;
 
 function QuickActions({
   onAddMoney,
   onSend,
   onReceive,
-  onMerchant,
 }: {
   onAddMoney: () => void;
   onSend: () => void;
   onReceive: () => void;
-  onMerchant: () => void;
 }) {
   const handlers: Record<string, () => void> = {
     add: onAddMoney,
     send: onSend,
     receive: onReceive,
-    merchant: onMerchant,
   };
 
   return (
     <div className="px-4 mb-5">
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 gap-3">
         {QUICK_ACTIONS.map(({ label, icon: Icon, isOrange, key }) => (
           <button
             key={key}
@@ -348,7 +322,7 @@ function QuickActions({
           >
             <div
               className={cn(
-                "w-13 h-13 rounded-[18px] flex items-center justify-center active:scale-90 transition-transform",
+                "w-15 h-15 rounded-[18px] flex items-center justify-center active:scale-90 transition-transform",
                 isOrange
                   ? "bg-orange-gradient shadow-[0_4px_16px_rgba(249,115,22,0.35)]"
                   : "bg-navy-surface border border-navy-border"
