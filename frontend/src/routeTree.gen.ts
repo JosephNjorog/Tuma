@@ -26,6 +26,7 @@ import { Route as SignupVerifyRouteImport } from './routes/signup_.verify'
 import { Route as SignupPinRouteImport } from './routes/signup_.pin'
 import { Route as SignupCompleteRouteImport } from './routes/signup_.complete'
 import { Route as SignupBiometricsRouteImport } from './routes/signup_.biometrics'
+import { Route as SettingsPinRouteImport } from './routes/settings_.pin'
 import { Route as LoginVerifyRouteImport } from './routes/login_.verify'
 import { Route as LoginPhoneRouteImport } from './routes/login_.phone'
 import { Route as ClaimRefRouteImport } from './routes/claim.$ref'
@@ -115,6 +116,11 @@ const SignupBiometricsRoute = SignupBiometricsRouteImport.update({
   path: '/signup/biometrics',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsPinRoute = SettingsPinRouteImport.update({
+  id: '/settings_/pin',
+  path: '/settings/pin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginVerifyRoute = LoginVerifyRouteImport.update({
   id: '/login_/verify',
   path: '/login/verify',
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/claim/$ref': typeof ClaimRefRoute
   '/login/phone': typeof LoginPhoneRoute
   '/login/verify': typeof LoginVerifyRoute
+  '/settings/pin': typeof SettingsPinRoute
   '/signup/biometrics': typeof SignupBiometricsRoute
   '/signup/complete': typeof SignupCompleteRoute
   '/signup/pin': typeof SignupPinRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/claim/$ref': typeof ClaimRefRoute
   '/login/phone': typeof LoginPhoneRoute
   '/login/verify': typeof LoginVerifyRoute
+  '/settings/pin': typeof SettingsPinRoute
   '/signup/biometrics': typeof SignupBiometricsRoute
   '/signup/complete': typeof SignupCompleteRoute
   '/signup/pin': typeof SignupPinRoute
@@ -192,6 +200,7 @@ export interface FileRoutesById {
   '/claim/$ref': typeof ClaimRefRoute
   '/login_/phone': typeof LoginPhoneRoute
   '/login_/verify': typeof LoginVerifyRoute
+  '/settings_/pin': typeof SettingsPinRoute
   '/signup_/biometrics': typeof SignupBiometricsRoute
   '/signup_/complete': typeof SignupCompleteRoute
   '/signup_/pin': typeof SignupPinRoute
@@ -216,6 +225,7 @@ export interface FileRouteTypes {
     | '/claim/$ref'
     | '/login/phone'
     | '/login/verify'
+    | '/settings/pin'
     | '/signup/biometrics'
     | '/signup/complete'
     | '/signup/pin'
@@ -238,6 +248,7 @@ export interface FileRouteTypes {
     | '/claim/$ref'
     | '/login/phone'
     | '/login/verify'
+    | '/settings/pin'
     | '/signup/biometrics'
     | '/signup/complete'
     | '/signup/pin'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/claim/$ref'
     | '/login_/phone'
     | '/login_/verify'
+    | '/settings_/pin'
     | '/signup_/biometrics'
     | '/signup_/complete'
     | '/signup_/pin'
@@ -283,6 +295,7 @@ export interface RootRouteChildren {
   ClaimRefRoute: typeof ClaimRefRoute
   LoginPhoneRoute: typeof LoginPhoneRoute
   LoginVerifyRoute: typeof LoginVerifyRoute
+  SettingsPinRoute: typeof SettingsPinRoute
   SignupBiometricsRoute: typeof SignupBiometricsRoute
   SignupCompleteRoute: typeof SignupCompleteRoute
   SignupPinRoute: typeof SignupPinRoute
@@ -411,6 +424,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupBiometricsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings_/pin': {
+      id: '/settings_/pin'
+      path: '/settings/pin'
+      fullPath: '/settings/pin'
+      preLoaderRoute: typeof SettingsPinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login_/verify': {
       id: '/login_/verify'
       path: '/login/verify'
@@ -451,6 +471,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClaimRefRoute: ClaimRefRoute,
   LoginPhoneRoute: LoginPhoneRoute,
   LoginVerifyRoute: LoginVerifyRoute,
+  SettingsPinRoute: SettingsPinRoute,
   SignupBiometricsRoute: SignupBiometricsRoute,
   SignupCompleteRoute: SignupCompleteRoute,
   SignupPinRoute: SignupPinRoute,
