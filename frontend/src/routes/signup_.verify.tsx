@@ -10,7 +10,7 @@ import { apiClient, ApiError } from "@/lib/api";
 import { useSignupStore } from "@/stores/signupStore";
 import { useSessionStore } from "@/stores/sessionStore";
 import { maskEmail } from "@/lib/utils";
-import { OTP_LENGTH, OTP_RESEND_SECONDS } from "@/lib/constants";
+import { OTP_LENGTH, OTP_RESEND_SECONDS, TERMS_VERSION } from "@/lib/constants";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +34,7 @@ type BackendAuthResponse = {
 
 function SignupVerify() {
   const navigate = useNavigate();
-  const { phone, email, setPinHash: _setPinHash, clearSignupStore: _clear } = useSignupStore();
+  const { phone, email, terms_accepted, setPinHash: _setPinHash, clearSignupStore: _clear } = useSignupStore();
   const { setSession } = useSessionStore();
 
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +59,8 @@ function SignupVerify() {
       const res = await apiClient.post<BackendAuthResponse>("/api/auth/verify-otp", {
         phone,
         code: otp,
+        termsAccepted: terms_accepted,
+        termsVersion: TERMS_VERSION,
       });
 
       const emailLocal = res.user.email
