@@ -41,11 +41,13 @@ function LoginVerify() {
   const otpRef = useRef<OtpInputRef>(null);
   const timerRef = useRef<CountdownTimerRef>(null);
 
+  // Run only on mount — phone clears after successful login, which must not re-trigger this
   useEffect(() => {
     if (!phone) {
       void navigate({ to: "/login/phone" });
     }
-  }, [phone, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const navigateAfterLogin = () => {
     const redirect = sessionStorage.getItem("autopayke_redirect_to");
