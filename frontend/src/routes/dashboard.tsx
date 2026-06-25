@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
-  LogOut,
   Plus,
   ArrowUpRight,
   QrCode,
@@ -18,7 +17,9 @@ import { BottomNav } from "@/components/BottomNav";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { apiClient } from "@/lib/api";
 import { useSessionStore } from "@/stores/sessionStore";
+import { useProfileStore } from "@/stores/profileStore";
 import { useWalletStore } from "@/stores/walletStore";
+import { Avatar } from "@/components/Avatar";
 import { getGreeting, usdcToKes, formatUSD } from "@/lib/utils";
 import { BALANCE_STALE_TIME_MS, TRANSACTIONS_STALE_TIME_MS } from "@/lib/constants";
 import { useTransactionSocket } from "@/hooks/useTransactionSocket";
@@ -40,8 +41,8 @@ export const Route = createFileRoute("/dashboard")({
 function Dashboard() {
   const navigate = useNavigate();
   const sessionStore = useSessionStore();
+  const profile = useProfileStore();
   const { setBalance, clearBalance } = useWalletStore();
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const touchStartY = useRef(0);
 
   useTransactionSocket();
@@ -72,12 +73,6 @@ function Dashboard() {
   const totalUsd = walletQuery.data?.totalUsd?.toFixed(2) ?? "0";
   const totalKes = useMemo(() => usdcToKes(totalUsd, kesRate), [totalUsd, kesRate]);
 
-  const handleLogout = () => {
-    sessionStore.clearSession();
-    clearBalance();
-    void navigate({ to: "/login" });
-  };
-
   const isRefetching = walletQuery.isRefetching || transactionsQuery.isRefetching;
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -93,7 +88,8 @@ function Dashboard() {
   };
 
   const greeting = getGreeting();
-  const firstName = sessionStore.getFirstName();
+  const firstName = profile.displayName?.split(" ")[0] ?? sessionStore.getFirstName();
+  const avatarFallback = (firstName || sessionStore.phone || "A")[0]?.toUpperCase() ?? "A";
   const walletAddress = sessionStore.wallet_address ?? "";
 
   return (
@@ -116,16 +112,28 @@ function Dashboard() {
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-5 pb-5">
-          <div>
-            <p className="text-[11px] text-white/30 font-medium">{greeting}</p>
-            {firstName && (
-              <p className="font-display text-[20px] font-extrabold text-white mt-0.5">
-                {firstName}
-              </p>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/settings/profile" })}
+            className="flex items-center gap-2.5 focus-visible:outline-none"
+          >
+            <Avatar
+              avatarKey={profile.avatarKey}
+              avatarDataUrl={profile.avatarDataUrl}
+              fallbackLetter={avatarFallback}
+              size="md"
+            />
+            <div className="text-left">
+              <p className="text-[11px] text-white/30 font-medium">{greeting}</p>
+              {firstName && (
+                <p className="font-display text-[16px] font-extrabold text-white leading-tight">
+                  {firstName}
+                </p>
+              )}
+            </div>
+          </button>
 
-          <div className="flex gap-2 relative">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => {}}
@@ -134,40 +142,6 @@ function Dashboard() {
             >
               <Bell size={18} strokeWidth={1.5} className="text-white/50" />
             </button>
-
-            <button
-              type="button"
-              onClick={() => setShowLogoutConfirm((v) => !v)}
-              aria-label="Log out"
-              className="w-9 h-9 rounded-xl bg-white/10 border border-navy-border flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-orange"
-            >
-              <LogOut size={18} strokeWidth={1.5} className="text-white/50" />
-            </button>
-
-            {showLogoutConfirm && (
-              <div className="absolute top-11 right-0 bg-navy-surface border border-navy-border rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-30 w-52">
-                <p className="text-[13px] font-semibold text-white mb-1">Log out?</p>
-                <p className="text-[11px] text-white/50 leading-relaxed mb-3">
-                  You will need to verify your identity to log back in.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowLogoutConfirm(false)}
-                    className="flex-1 py-1.5 rounded-lg border border-white/10 text-[12px] text-white/60 font-semibold focus-visible:outline-none"
-                  >
-                    Stay
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="flex-1 py-1.5 rounded-lg bg-danger/15 border border-danger/30 text-[12px] text-danger font-semibold focus-visible:outline-none"
-                  >
-                    Log out
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
