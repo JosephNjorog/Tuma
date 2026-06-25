@@ -69,11 +69,11 @@ function SignupVerify() {
     setResending(true);
     setError(null);
     try {
-      const res = await apiClient.post<{ otp_id: string; expires_in: number }>(
+      const res = await apiClient.post<{ otp_id?: string; id?: string; expires_in?: number }>(
         "/api/auth/send-otp",
         { phone, email, channel: "email" }
       );
-      setOtpId(res.otp_id);
+      setOtpId(res.otp_id ?? res.id ?? "");
       otpRef.current?.reset();
       timerRef.current?.reset();
       toast.success("A new code has been sent to your email.");
