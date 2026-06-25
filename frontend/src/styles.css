@@ -52,6 +52,10 @@
   --animate-fade-slide-up: fadeSlideUp 0.3s ease-out;
   --animate-pulse-dot: pulse-dot 2s ease-in-out infinite;
 
+  /* dvh = dynamic viewport height — shrinks when keyboard opens on iOS/Android.
+     This makes min-h-screen, h-screen etc. adapt to the real visible area. */
+  --height-screen: 100dvh;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
