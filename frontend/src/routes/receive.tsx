@@ -1,4 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
+import { useSessionStore } from "@/stores/sessionStore";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Share2, Copy, Check } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +11,12 @@ import { countries } from "@/lib/tuma-data";
 import { buildPayUrl } from "@/lib/pay-link";
 
 export const Route = createFileRoute("/receive")({
+  beforeLoad: () => {
+    if (!useSessionStore.getState().isAuthenticated()) {
+      sessionStorage.setItem("autopayke_redirect_to", "/receive");
+      throw redirect({ to: "/login", replace: true });
+    }
+  },
   component: Receive,
 });
 
