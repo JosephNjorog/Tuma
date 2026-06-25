@@ -1,128 +1,28 @@
-import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
-import { useSessionStore } from "@/stores/sessionStore";
-import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, Copy, Send, QrCode, Plus, Store, ArrowUpRight, ArrowDownLeft, Bell, Check, Loader2, LogOut, Inbox, BadgeCheck, XCircle, Sun, Moon } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MobileFrame } from "@/components/MobileFrame";
+import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Bell,
+  LogOut,
+  Plus,
+  ArrowUpRight,
+  QrCode,
+  Store,
+  Activity,
+  AlertCircle,
+} from "lucide-react";
+import { BalanceCard } from "@/components/BalanceCard";
+import { TransactionRow } from "@/components/TransactionRow";
 import { BottomNav } from "@/components/BottomNav";
-import { CurrencyToggle } from "@/components/CurrencyToggle";
-import { api, type WalletAsset, type TxSummary, type Notification } from "@/lib/api/client";
-import { useAuthStore } from "@/lib/auth-store";
-import { useThemeStore } from "@/lib/theme-store";
-import { useCurrencyStore } from "@/lib/currency-store";
-import { useKesRate } from "@/hooks/use-kes-rate";
-import { formatMoney } from "@/lib/tuma-data";
-
-function ThemeToggle() {
-  const { theme, toggleTheme } = useThemeStore();
-  return (
-    <button
-      onClick={toggleTheme}
-      aria-label="Toggle dark mode"
-      className="h-9 w-9 rounded-full border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground transition"
-    >
-      {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-    </button>
-  );
-}
-
-function fmtNotifTime(iso: string) {
-  const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
-
-function notifIcon(kind: Notification["kind"]) {
-  if (kind === "received") return <ArrowDownLeft className="h-4 w-4" />;
-  if (kind === "failed") return <XCircle className="h-4 w-4" />;
-  return <BadgeCheck className="h-4 w-4" />;
-}
-
-function NotificationBell({ accessToken }: { accessToken: string | null }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
-
-  const { data } = useQuery({
-    queryKey: ["notifications"],
-    queryFn: () => api.notifications.list(accessToken!),
-    enabled: !!accessToken,
-    refetchInterval: 30_000,
-  });
-
-  const notifications = data?.notifications ?? [];
-  const unread = data?.unread ?? 0;
-
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [open]);
-
-  async function handleOpen() {
-    setOpen((o) => !o);
-    if (!open && unread > 0 && accessToken) {
-      await api.notifications.markSeen(accessToken);
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-    }
-  }
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={handleOpen}
-        aria-label="Notifications"
-        className="relative h-9 w-9 rounded-full border border-border bg-card flex items-center justify-center"
-      >
-        <Bell className="h-4 w-4" />
-        {unread > 0 && (
-          <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center">
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <div className="absolute right-0 mt-2 w-72 max-h-96 overflow-y-auto rounded-2xl border border-border bg-card shadow-(--shadow-elegant) z-20">
-          <div className="px-4 py-3 border-b border-border">
-            <p className="text-sm font-bold">Notifications</p>
-          </div>
-          {notifications.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
-              <Inbox className="h-6 w-6" />
-              <p className="text-xs">Nothing yet</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {notifications.map((n) => (
-                <div key={n.id} className="flex items-start gap-2.5 px-4 py-3">
-                  <div
-                    className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${
-                      n.kind === "failed" ? "bg-destructive/10 text-destructive" : n.kind === "received" ? "bg-success-soft text-success" : "bg-primary-soft text-primary"
-                    }`}
-                  >
-                    {notifIcon(n.kind)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold">{n.title}</p>
-                    <p className="text-[11px] text-muted-foreground leading-snug">{n.body}</p>
-                    <p className="mt-0.5 text-[10px] text-muted-foreground/70">{fmtNotifTime(n.createdAt)}</p>
-                  </div>
-                  {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0 mt-1" />}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { apiClient } from "@/lib/api";
+import { useSessionStore } from "@/stores/sessionStore";
+import { useWalletStore } from "@/stores/walletStore";
+import { getGreeting, usdcToKes, formatUSD } from "@/lib/utils";
+import { BALANCE_STALE_TIME_MS, TRANSACTIONS_STALE_TIME_MS } from "@/lib/constants";
+import { useTransactionSocket } from "@/hooks/useTransactionSocket";
+import type { WalletBalance, Transaction } from "@/types";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/dashboard")({
   beforeLoad: () => {
@@ -131,236 +31,445 @@ export const Route = createFileRoute("/dashboard")({
       throw redirect({ to: "/login", replace: true });
     }
   },
-  head: () => ({ meta: [{ title: "Home · Autopayke" }, { name: "description", content: "Your Autopayke wallet — balance, assets, send & receive." }] }),
+  head: () => ({ meta: [{ title: "Home · AutoPayKe" }] }),
   component: Dashboard,
 });
 
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
-
-function assetColor(symbol: string) {
-  if (symbol === "USDC") return "bg-blue-600";
-  if (symbol === "USDT") return "bg-emerald-500";
-  if (symbol === "AVAX") return "bg-red-500";
-  return "bg-muted";
-}
-
 function Dashboard() {
   const navigate = useNavigate();
-  const { accessToken, refreshToken, user, isLoggedIn, logout } = useAuthStore();
-  const { displayCurrency } = useCurrencyStore();
-  const kesRate = useKesRate();
-  const [hide, setHide] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const sessionStore = useSessionStore();
+  const { setBalance, clearBalance } = useWalletStore();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const touchStartY = useRef(0);
+
+  useTransactionSocket();
+
+  const walletQuery = useQuery({
+    queryKey: ["wallet", "balance"],
+    queryFn: () => apiClient.get<WalletBalance>("/api/wallet/balance"),
+    staleTime: BALANCE_STALE_TIME_MS,
+    refetchInterval: 30000,
+    retry: 1,
+  });
+
+  const transactionsQuery = useQuery({
+    queryKey: ["transactions", "recent"],
+    queryFn: () =>
+      apiClient.get<{ transactions: Transaction[] }>("/api/transactions?limit=5"),
+    staleTime: TRANSACTIONS_STALE_TIME_MS,
+    retry: 1,
+  });
 
   useEffect(() => {
-    if (!isLoggedIn()) navigate({ to: "/signup" });
-  }, [isLoggedIn, navigate]);
-
-  async function handleLogout() {
-    try {
-      if (refreshToken && accessToken) await api.auth.logout(refreshToken, accessToken);
-    } catch {
-      // ignore — log out locally regardless of network/API state
+    if (walletQuery.data) {
+      sessionStore.setKesRate(walletQuery.data.kes_rate);
+      setBalance(walletQuery.data);
     }
-    logout();
-    navigate({ to: "/" });
-  }
+  }, [walletQuery.data, sessionStore, setBalance]);
 
-  const { data: wallet, isLoading: walletLoading } = useQuery({
-    queryKey: ["wallet"],
-    queryFn: () => api.wallet.get(accessToken!),
-    enabled: !!accessToken,
-    retry: 2,
-    refetchInterval: (query) =>
-      (query.state.data as { status?: string } | undefined)?.status === "deploying" ? 4_000 : false,
-  });
+  const kesRate = sessionStore.kes_rate || 130;
+  const totalUsd = walletQuery.data?.total_usd ?? "0";
+  const totalKes = useMemo(() => usdcToKes(totalUsd, kesRate), [totalUsd, kesRate]);
 
-  const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ["history", "recent"],
-    queryFn: () => api.history.list(accessToken!, { limit: 4 }),
-    enabled: !!accessToken,
-  });
+  const handleLogout = () => {
+    sessionStore.clearSession();
+    clearBalance();
+    void navigate({ to: "/login" });
+  };
 
-  const walletAddress = wallet?.walletAddress ?? null;
-  const isDeploying = wallet?.status === "deploying";
-  const totalUsd = wallet?.totalUsd ?? 0;
-  const assets: WalletAsset[] = wallet?.assets ?? [];
-  const txs: TxSummary[] = historyData?.transactions ?? [];
-  const short = walletAddress ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}` : isDeploying ? "Deploying…" : "—";
-  const phoneHint = user?.phone ? user.phone.slice(-4) : "";
+  const isRefetching = walletQuery.isRefetching || transactionsQuery.isRefetching;
 
-  function greetingName() {
-    if (user?.email) {
-      const local = user.email.split("@")[0];
-      const first = local.split(/[._\-+]/)[0];
-      return first.charAt(0).toUpperCase() + first.slice(1);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0]?.clientY ?? 0;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const deltaY = (e.changedTouches[0]?.clientY ?? 0) - touchStartY.current;
+    if (deltaY > 70 && window.scrollY === 0) {
+      void walletQuery.refetch();
+      void transactionsQuery.refetch();
     }
-    return `…${phoneHint}`;
-  }
+  };
+
+  const greeting = getGreeting();
+  const firstName = sessionStore.getFirstName();
+  const walletAddress = sessionStore.wallet_address ?? "";
 
   return (
-    <MobileFrame>
-      <div className="flex min-h-full flex-col">
-        <header className="flex items-center justify-between px-5 pt-6 pb-2">
-          <div className="flex items-center gap-2">
-            <img src="/autopay_iconlogo.svg" alt="Autopayke" className="h-9 w-9 rounded-xl" />
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-none">Hello</p>
-              <p className="text-sm font-bold leading-tight">{greetingName()}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <NotificationBell accessToken={accessToken} />
-            <button
-              onClick={handleLogout}
-              aria-label="Log out"
-              className="h-9 w-9 rounded-full border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-destructive transition"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        </header>
+    <div
+      className="min-h-screen bg-dark-gradient relative overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Radial glow */}
+      <div className="pointer-events-none absolute -top-15 -right-15 w-50 h-50 rounded-full bg-[radial-gradient(circle,rgba(249,115,22,0.12)_0%,transparent_70%)]" />
 
-        {isDeploying && (
-          <div className="mx-5 mt-3 flex items-center gap-2 rounded-2xl bg-warning-soft px-4 py-2.5 text-xs text-warning-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-            Smart wallet deploying on Avalanche — ready in a moment.
-          </div>
-        )}
+      {/* Pull-to-refresh indicator */}
+      {isRefetching && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
+          <LoadingSpinner size={16} color="muted" />
+        </div>
+      )}
 
-        <div className="px-5 mt-3">
-          <div className="relative overflow-hidden rounded-3xl p-5 text-primary-foreground shadow-(--shadow-elegant)" style={{ background: "var(--gradient-portfolio)" }}>
-            <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/15 blur-2xl" />
-            <div className="absolute -left-5 -bottom-10 h-32 w-32 rounded-full bg-black/10 blur-2xl" />
-            <div className="relative flex items-center justify-between">
-              <p className="text-xs opacity-80 uppercase tracking-wider">Total balance</p>
-              <div className="flex items-center gap-2">
-                <CurrencyToggle />
-                <button onClick={() => setHide((h) => !h)} className="h-8 w-8 rounded-full bg-white/15 backdrop-blur flex items-center justify-center">
-                  {hide ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            {walletLoading ? (
-              <div className="mt-2 h-10 w-32 rounded-xl bg-white/20 animate-pulse" />
-            ) : isDeploying ? (
-              <div className="mt-2 flex items-center gap-2">
-                <Loader2 className="h-5 w-5 animate-spin opacity-70" />
-                <span className="text-2xl font-black opacity-60">Setting up…</span>
-              </div>
-            ) : (
-              <p className="relative mt-2 text-4xl font-black tracking-tight">
-                {hide ? "••••••" : formatMoney(totalUsd, displayCurrency, kesRate)}
+      <div className="relative z-10 pb-28 max-w-97.5 mx-auto">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-5 pb-5">
+          <div>
+            <p className="text-[11px] text-white/30 font-medium">{greeting}</p>
+            {firstName && (
+              <p className="font-display text-[20px] font-extrabold text-white mt-0.5">
+                {firstName}
               </p>
             )}
-            <div className="relative mt-4 flex items-center gap-3">
-              <button
-                onClick={() => { if (walletAddress) { navigator.clipboard?.writeText(walletAddress); setCopied(true); setTimeout(() => setCopied(false), 1500); } }}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white/15 backdrop-blur px-3 py-1.5 text-xs font-medium"
-              >
-                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                {copied ? "Copied" : short}
-              </button>
-            </div>
           </div>
-        </div>
 
-        <div className="mt-5 px-5">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-bold">Assets</h2>
-            <Link to="/wallet" className="text-xs text-primary font-semibold">View all</Link>
-          </div>
-          {walletLoading ? (
-            <div className="grid grid-cols-3 gap-2">
-              {[0,1,2].map((i) => <div key={i} className="h-24 rounded-2xl bg-card border border-border animate-pulse" />)}
-            </div>
-          ) : assets.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No assets yet. Fund your wallet to get started.</p>
-          ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {assets.map((a) => (
-                <div key={a.symbol} className="rounded-2xl border border-border bg-card p-3">
-                  <div className={`h-7 w-7 rounded-full ${assetColor(a.symbol)} flex items-center justify-center text-[10px] font-bold text-white`}>{a.symbol[0]}</div>
-                  <p className="mt-2 text-[10px] text-muted-foreground">{a.symbol}</p>
-                  <p className="text-sm font-bold leading-tight">{parseFloat(a.balance).toFixed(2)}</p>
-                  <p className="text-[10px] text-muted-foreground">{formatMoney(a.balanceUsd, displayCurrency, kesRate)}</p>
+          <div className="flex gap-2 relative">
+            <button
+              type="button"
+              onClick={() => {}}
+              aria-label="Notifications"
+              className="w-9 h-9 rounded-xl bg-white/10 border border-navy-border flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-orange"
+            >
+              <Bell size={18} strokeWidth={1.5} className="text-white/50" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm((v) => !v)}
+              aria-label="Log out"
+              className="w-9 h-9 rounded-xl bg-white/10 border border-navy-border flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-orange"
+            >
+              <LogOut size={18} strokeWidth={1.5} className="text-white/50" />
+            </button>
+
+            {showLogoutConfirm && (
+              <div className="absolute top-11 right-0 bg-navy-surface border border-navy-border rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-30 w-52">
+                <p className="text-[13px] font-semibold text-white mb-1">Log out?</p>
+                <p className="text-[11px] text-white/50 leading-relaxed mb-3">
+                  You will need to verify your identity to log back in.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLogoutConfirm(false)}
+                    className="flex-1 py-1.5 rounded-lg border border-white/10 text-[12px] text-white/60 font-semibold focus-visible:outline-none"
+                  >
+                    Stay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex-1 py-1.5 rounded-lg bg-danger/15 border border-danger/30 text-[12px] text-danger font-semibold focus-visible:outline-none"
+                  >
+                    Log out
+                  </button>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="mt-6 px-5">
-          <div className="grid grid-cols-4 gap-3">
-            <Action to="/fund" icon={Plus} label="Add money" primary />
-            <Action to="/send" icon={Send} label="Send" />
-            <Action to="/receive" icon={QrCode} label="Receive" />
-            <Action to="/merchant" icon={Store} label="Merchant" />
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="mt-7 px-5 flex-1">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-bold">Recent activity</h2>
-            <Link to="/history" className="text-xs text-primary font-semibold">See all</Link>
-          </div>
-          {historyLoading ? (
-            <div className="space-y-2">
-              {[0,1,2].map((i) => <div key={i} className="h-16 rounded-2xl bg-card border border-border animate-pulse" />)}
-            </div>
-          ) : txs.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-              No transactions yet
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-border bg-card divide-y divide-border overflow-hidden">
-              {txs.map((tx) => (
-                <Link key={tx.id} to="/track/$id" params={{ id: tx.id }} className="flex items-center gap-3 p-3.5 hover:bg-muted transition">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${tx.direction === "in" ? "bg-success-soft text-success" : "bg-primary-soft text-primary"}`}>
-                    {tx.direction === "in" ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{tx.counterparty}</p>
-                    <p className="text-[11px] text-muted-foreground">{tx.rail} · {fmtDate(tx.createdAt)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${tx.direction === "in" ? "text-success" : ""}`}>{tx.direction === "in" ? "+" : "−"}${tx.amountUsd.toFixed(2)}</p>
-                    {tx.status === "initiated" && <p className="text-[10px] text-warning font-semibold">Pending</p>}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
+        {/* Balance Card */}
+        <div className="px-4 mb-5">
+          <BalanceCard
+            totalUsd={totalUsd}
+            totalKes={totalKes}
+            walletAddress={walletAddress}
+            isLoading={walletQuery.isLoading}
+          />
         </div>
 
-        <div className="h-24" />
-        <BottomNav />
+        {/* Assets */}
+        <AssetsSection
+          data={walletQuery.data}
+          isLoading={walletQuery.isLoading}
+          onViewAll={() => navigate({ to: "/wallet" })}
+        />
+
+        {/* Quick Actions */}
+        <QuickActions
+          onAddMoney={() => navigate({ to: "/fund" })}
+          onSend={() => navigate({ to: "/send" })}
+          onReceive={() => navigate({ to: "/receive" })}
+          onMerchant={() => navigate({ to: "/merchant" })}
+        />
+
+        {/* Recent Activity */}
+        <RecentActivity
+          query={transactionsQuery}
+          onViewAll={() => navigate({ to: "/history" })}
+          onAddMoney={() => navigate({ to: "/fund" })}
+        />
       </div>
-    </MobileFrame>
+
+      <BottomNav />
+    </div>
   );
 }
 
-function Action({ to, icon: Icon, label, primary }: { to: string; icon: typeof Send; label: string; primary?: boolean }) {
+// ── Assets Section ───────────────────────────────────────────────────────────
+
+interface AssetChipData {
+  key: string;
+  name: string;
+  color: string;
+  letter: string;
+  primaryAmount: string;
+  secondaryAmount: string;
+}
+
+const AssetsSection = memo(function AssetsSection({
+  data,
+  isLoading,
+  onViewAll,
+}: {
+  data: WalletBalance | undefined;
+  isLoading: boolean;
+  onViewAll: () => void;
+}) {
+  const chips = useMemo<AssetChipData[]>(() => {
+    if (!data) return [];
+    const avaxUsd = Math.max(
+      0,
+      parseFloat(data.total_usd) - parseFloat(data.usdc) - parseFloat(data.usdt)
+    ).toFixed(2);
+    return [
+      {
+        key: "usdc",
+        name: "USDC",
+        color: "#2775CA",
+        letter: "U",
+        primaryAmount: formatUSD(data.usdc),
+        secondaryAmount: `${parseFloat(data.usdc).toFixed(2)} USDC`,
+      },
+      {
+        key: "usdt",
+        name: "USDT",
+        color: "#26A17B",
+        letter: "U",
+        primaryAmount: formatUSD(data.usdt),
+        secondaryAmount: `${parseFloat(data.usdt).toFixed(2)} USDT`,
+      },
+      {
+        key: "avax",
+        name: "AVAX",
+        color: "#E84142",
+        letter: "A",
+        primaryAmount: formatUSD(avaxUsd),
+        secondaryAmount: `${parseFloat(data.avax).toFixed(4)} AVAX`,
+      },
+    ];
+  }, [data]);
+
   return (
-    <Link to={to} className="flex flex-col items-center gap-1.5 group">
-      <div
-        className={`h-14 w-14 rounded-2xl flex items-center justify-center transition group-active:scale-95 ${
-          primary ? "text-primary-foreground shadow-(--shadow-elegant)" : "bg-card border border-border text-foreground"
-        }`}
-        style={primary ? { background: "var(--gradient-portfolio)" } : undefined}
-      >
-        <Icon className="h-5 w-5" />
+    <div className="px-4 mb-5">
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-bold text-[13px] text-white">Assets</span>
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="text-[12px] text-orange font-semibold cursor-pointer focus-visible:outline-none"
+        >
+          View all
+        </button>
       </div>
-      <span className="text-[11px] font-semibold">{label}</span>
-    </Link>
+
+      <div className="flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {isLoading
+          ? [0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="shrink-0 w-22.5 h-22 rounded-2xl bg-navy-card animate-pulse"
+              />
+            ))
+          : chips.map((chip) => (
+              <div
+                key={chip.key}
+                className="shrink-0 bg-navy-card border border-navy-border rounded-2xl p-3 flex flex-col gap-1 min-w-22.5"
+              >
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-black mb-1"
+                  style={{ backgroundColor: chip.color }}
+                >
+                  {chip.letter}
+                </div>
+                <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wide">
+                  {chip.name}
+                </span>
+                <span className="text-[14px] font-bold text-white">{chip.primaryAmount}</span>
+                <span className="text-[11px] text-white/30">{chip.secondaryAmount}</span>
+              </div>
+            ))}
+      </div>
+    </div>
+  );
+});
+
+// ── Quick Actions ─────────────────────────────────────────────────────────────
+
+const QUICK_ACTIONS = [
+  {
+    label: "Add money",
+    icon: Plus,
+    isOrange: true,
+    key: "add",
+  },
+  {
+    label: "Send",
+    icon: ArrowUpRight,
+    isOrange: false,
+    key: "send",
+  },
+  {
+    label: "Receive",
+    icon: QrCode,
+    isOrange: false,
+    key: "receive",
+  },
+  {
+    label: "Merchant",
+    icon: Store,
+    isOrange: false,
+    key: "merchant",
+  },
+] as const;
+
+function QuickActions({
+  onAddMoney,
+  onSend,
+  onReceive,
+  onMerchant,
+}: {
+  onAddMoney: () => void;
+  onSend: () => void;
+  onReceive: () => void;
+  onMerchant: () => void;
+}) {
+  const handlers: Record<string, () => void> = {
+    add: onAddMoney,
+    send: onSend,
+    receive: onReceive,
+    merchant: onMerchant,
+  };
+
+  return (
+    <div className="px-4 mb-5">
+      <div className="grid grid-cols-4 gap-2">
+        {QUICK_ACTIONS.map(({ label, icon: Icon, isOrange, key }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={handlers[key]}
+            className="flex flex-col items-center gap-2 cursor-pointer focus-visible:outline-none group"
+          >
+            <div
+              className={cn(
+                "w-13 h-13 rounded-[18px] flex items-center justify-center active:scale-90 transition-transform",
+                isOrange
+                  ? "bg-orange-gradient shadow-[0_4px_16px_rgba(249,115,22,0.35)]"
+                  : "bg-navy-surface border border-navy-border"
+              )}
+            >
+              {isOrange ? (
+                <Icon size={22} strokeWidth={2.5} className="text-white" />
+              ) : (
+                <Icon size={20} strokeWidth={1.5} className="text-white" />
+              )}
+            </div>
+            <span className="text-[11px] font-semibold text-white/60">{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Recent Activity ───────────────────────────────────────────────────────────
+
+function TransactionSkeleton() {
+  return (
+    <div className="flex items-center gap-3 py-3 border-b border-white/5">
+      <div className="w-9.5 h-9.5 rounded-xl bg-navy-card animate-pulse shrink-0" />
+      <div className="flex-1">
+        <div className="h-3.5 w-32 rounded bg-navy-card animate-pulse" />
+        <div className="h-3 w-20 rounded bg-navy-card animate-pulse mt-1.5" />
+      </div>
+      <div className="h-4 w-14 rounded bg-navy-card animate-pulse ml-auto" />
+    </div>
+  );
+}
+
+function RecentActivity({
+  query,
+  onViewAll,
+  onAddMoney,
+}: {
+  query: ReturnType<typeof useQuery<{ transactions: Transaction[] }>>;
+  onViewAll: () => void;
+  onAddMoney: () => void;
+}) {
+  const transactions = query.data?.transactions ?? [];
+
+  return (
+    <div className="px-4">
+      <div className="flex items-center justify-between mb-4">
+        <span className="font-bold text-[13px] text-white">Recent activity</span>
+        {transactions.length > 0 && (
+          <button
+            type="button"
+            onClick={onViewAll}
+            className="text-[12px] text-orange font-semibold cursor-pointer focus-visible:outline-none"
+          >
+            See all
+          </button>
+        )}
+      </div>
+
+      {query.isLoading && (
+        <div className="flex flex-col">
+          <TransactionSkeleton />
+          <TransactionSkeleton />
+          <TransactionSkeleton />
+        </div>
+      )}
+
+      {!query.isLoading && query.isError && (
+        <div className="flex flex-col items-center py-8 text-center">
+          <AlertCircle size={24} strokeWidth={1.5} className="text-white/20 mb-2" />
+          <p className="text-[13px] text-white/30">Could not load transactions.</p>
+          <button
+            type="button"
+            onClick={() => void query.refetch()}
+            className="mt-2 text-[12px] text-orange font-semibold cursor-pointer focus-visible:outline-none"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!query.isLoading && !query.isError && transactions.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Activity size={28} strokeWidth={1.5} className="text-white/20 mb-3" />
+          <p className="text-[14px] font-bold text-white/40 mb-1">No transactions yet</p>
+          <p className="text-[12px] text-white/25">Add money to get started.</p>
+          <button
+            type="button"
+            onClick={onAddMoney}
+            className="mt-4 px-5 py-2.5 rounded-xl bg-orange/15 border border-orange/25 text-orange text-[13px] font-semibold focus-visible:outline-none"
+          >
+            Add money
+          </button>
+        </div>
+      )}
+
+      {!query.isLoading && !query.isError && transactions.length > 0 && (
+        <div className="flex flex-col">
+          {transactions.map((tx) => (
+            <TransactionRow key={tx.id} transaction={tx} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
