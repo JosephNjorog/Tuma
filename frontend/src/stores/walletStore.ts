@@ -21,10 +21,10 @@ export const useWalletStore = create<WalletState>()((set) => ({
 
   setBalance: (balance) =>
     set({
-      usdc_balance: balance.usdc,
-      usdt_balance: balance.usdt,
-      avax_balance: balance.avax,
-      total_usd: balance.total_usd,
+      usdc_balance: balance.assets.find((a) => a.symbol === "USDC")?.balance ?? "0",
+      usdt_balance: balance.assets.find((a) => a.symbol === "USDT")?.balance ?? "0",
+      avax_balance: balance.assets.find((a) => a.symbol === "AVAX")?.balance ?? "0",
+      total_usd: balance.totalUsd.toFixed(2),
       last_fetched: Date.now(),
     }),
 
