@@ -24,7 +24,7 @@ const STEPS = [
 function SignupComplete() {
   const navigate = useNavigate();
   const { phone, email, signup_token, pin_hash, clearSignupStore } = useSignupStore();
-  const { setSession } = useSessionStore();
+  const { setSession, setPinHash } = useSessionStore();
 
   const [activating, setActivating] = useState(false);
   const [done, setDone] = useState(false);
@@ -60,6 +60,9 @@ function SignupComplete() {
           display_name: res.display_name,
           wallet_address: res.wallet_address,
         });
+
+        // persist pin_hash so the lock screen can verify locally next time
+        if (pin_hash) setPinHash(pin_hash);
 
         clearSignupStore();
         setDone(true);
