@@ -6,27 +6,37 @@ export type CountryConfig = {
   phoneLength: number;
 };
 
-export type Transaction = {
-  id: string;
-  type: "received" | "sent";
-  source: "mpesa" | "paystack" | "bank" | "crypto" | "internal";
-  amount_usdc: string;
-  amount_kes: string;
-  amount_usd: string;
-  status: "pending" | "completed" | "failed";
-  recipient_phone: string | null;
-  recipient_name: string | null;
-  rail: string;
-  created_at: string;
+
+export type AssetBalance = {
+  symbol: string;
+  balance: string;
+  balanceUsd: number;
 };
 
 export type WalletBalance = {
-  usdc: string;
-  usdt: string;
-  avax: string;
-  total_usd: string;
-  kes_rate: number;
-  wallet_address: string;
+  walletAddress: string | null;
+  totalUsd: number;
+  assets: AssetBalance[];
+  network?: string;
+  status?: "deploying" | "active";
+};
+
+export type Transaction = {
+  id: string;
+  reference: string;
+  direction: "in" | "out";
+  counterparty: string | null;
+  amountUsd: number;
+  amountLocal: number;
+  localCurrency: string;
+  fxRate: number;
+  rail: string;
+  status: "pending" | "completed" | "failed";
+  note: string | null;
+  failureStage: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  settledAt: string | null;
 };
 
 export type UserSession = {
