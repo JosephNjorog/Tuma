@@ -47,17 +47,16 @@ export function maskEmail(email: string): string {
 }
 
 export function resolveTransactionLabel(tx: Transaction): string {
-  if (tx.type === "received") {
-    if (tx.source === "mpesa") return "M-Pesa deposit";
-    if (tx.source === "paystack") return "Paystack funding";
-    if (tx.source === "bank") return "Bank deposit";
-    if (tx.source === "crypto") return "Crypto deposit";
+  if (tx.direction === "in") {
+    if (tx.rail === "mpesa") return "M-Pesa deposit";
+    if (tx.rail === "paystack") return "Paystack funding";
+    if (tx.rail === "bank") return "Bank deposit";
+    if (tx.rail === "crypto") return "Crypto deposit";
     return "Transfer received";
   }
-  if (tx.type === "sent") {
-    if (tx.source === "mpesa") return "M-Pesa withdrawal";
-    if (tx.recipient_name) return `Send to ${tx.recipient_name}`;
-    if (tx.recipient_phone) return `Send to ${tx.recipient_phone.slice(0, 6)}...${tx.recipient_phone.slice(-3)}`;
+  if (tx.direction === "out") {
+    if (tx.rail === "mpesa") return "M-Pesa withdrawal";
+    if (tx.counterparty) return `Send to ${tx.counterparty}`;
     return "Transfer";
   }
   return "Transfer";
