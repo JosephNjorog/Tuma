@@ -6,6 +6,7 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { PinKeypad } from "@/components/PinKeypad";
 import { TrustBadge } from "@/components/TrustBadge";
 import { useSignupStore } from "@/stores/signupStore";
+import { useSessionStore } from "@/stores/sessionStore";
 import { hashPin } from "@/lib/utils";
 import { PIN_LENGTH } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,8 @@ type Stage = "create" | "confirm";
 
 function SignupPin() {
   const navigate = useNavigate();
-  const { signup_token, setPinHash } = useSignupStore();
+  const { setPinHash } = useSignupStore();
+  const { isAuthenticated } = useSessionStore();
 
   const [stage, setStage] = useState<Stage>("create");
   const [firstPin, setFirstPin] = useState<string | null>(null);
@@ -27,10 +29,10 @@ function SignupPin() {
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!signup_token) {
+    if (!isAuthenticated()) {
       void navigate({ to: "/signup" });
     }
-  }, [signup_token, navigate]);
+  }, []);
 
   const handleCreate = (pin: string) => {
     setFirstPin(pin);
