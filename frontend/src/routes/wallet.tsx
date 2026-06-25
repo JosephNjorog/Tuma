@@ -17,7 +17,8 @@ import { formatMoney } from "@/lib/tuma-data";
 
 export const Route = createFileRoute("/wallet")({
   beforeLoad: () => {
-    if (!useSessionStore.getState().isAuthenticated()) {
+    const s = useSessionStore.getState();
+    if (!s.isAuthenticated() || !s.is_unlocked) {
       sessionStorage.setItem("autopayke_redirect_to", "/wallet");
       throw redirect({ to: "/login", replace: true });
     }
