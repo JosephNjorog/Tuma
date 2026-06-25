@@ -9,7 +9,7 @@ export const SUPPORTED_COUNTRIES: readonly CountryConfig[] = [
   { code: "UG", name: "Uganda", dial: "+256", rail: "MTN MoMo", phoneLength: 9 },
 ] as const;
 
-export const PIN_LENGTH = 5;
+export const PIN_LENGTH = 4;
 export const OTP_LENGTH = 6;
 export const OTP_RESEND_SECONDS = 60;
 export const MAX_PIN_ATTEMPTS = 5;
