@@ -1,4 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
+import { useSessionStore } from "@/stores/sessionStore";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Copy, Check, ExternalLink, ShieldCheck, Wallet2, Unlink, Loader2, AlertCircle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -15,6 +16,12 @@ import { useKesRate } from "@/hooks/use-kes-rate";
 import { formatMoney } from "@/lib/tuma-data";
 
 export const Route = createFileRoute("/wallet")({
+  beforeLoad: () => {
+    if (!useSessionStore.getState().isAuthenticated()) {
+      sessionStorage.setItem("autopayke_redirect_to", "/wallet");
+      throw redirect({ to: "/login", replace: true });
+    }
+  },
   head: () => ({ meta: [{ title: "Wallet · Autopayke" }, { name: "description", content: "Your non-custodial smart wallet on Avalanche." }] }),
   component: Wallet,
 });
