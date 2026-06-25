@@ -1,4 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
+import { useSessionStore } from "@/stores/sessionStore";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowDownLeft, ArrowUpRight, Filter, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -8,6 +9,12 @@ import { api, type TxSummary } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/history")({
+  beforeLoad: () => {
+    if (!useSessionStore.getState().isAuthenticated()) {
+      sessionStorage.setItem("autopayke_redirect_to", "/history");
+      throw redirect({ to: "/login", replace: true });
+    }
+  },
   head: () => ({ meta: [{ title: "History · Autopayke" }, { name: "description", content: "All your Autopayke transactions." }] }),
   component: History,
 });
