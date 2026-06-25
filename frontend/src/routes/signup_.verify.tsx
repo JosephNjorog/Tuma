@@ -152,6 +152,7 @@ function SignupVerify() {
           <CountdownTimer
             ref={timerRef}
             initialSeconds={OTP_RESEND_SECONDS}
+            onExpire={() => {}}
             renderExpired={
               <button
                 type="button"
